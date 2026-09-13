@@ -5,11 +5,24 @@
 ## Current Work Focus
 
 TODO-02 "Project Foundation" (`.agent/todos/20260913/20260913-todo-2.md`) in
-progress on branch `feat/project-foundation`. T1 (§1 bootstrap) is done: a
-minimal bootable NestJS 11 app exists (`src/main.ts`, `src/app.module.ts`, root
-tooling configs). T2 (§2 validated configuration module) is next.
+progress on branch `feat/project-foundation`. T1 (§1 bootstrap) and T2 (§2
+validated configuration module) are done: the app boots through a global,
+cached `ConfigModule` that validates `.env` fail-fast
+(`src/config/env.validation.ts` + `src/config/config.keys.ts`). T3 (§3
+`main.ts` hardening) is next.
 
 ## Recent Changes
+
+- 2026-09-13: Validated configuration module (T2 of TODO-02):
+  `src/config/env.validation.ts` (class-validator schema — 5 required vars
+  `NODE_ENV`/`PORT`/`NUMERATOR_API_URL`/`JSON_SERVER_URL`/`API_KEY` + optional
+  `SWAGGER_ENABLED`/`CORS_ORIGINS`; URL fields require a protocol per plan
+  addendum A4-R, so protocol-less base URLs fail at startup) and
+  `src/config/config.keys.ts` (`ConfigKeys` constants for later consumers);
+  global `ConfigModule.forRoot({ isGlobal, cache, validate })` in
+  `AppModule`; fail-fast bootstrap error names every offending variable.
+  `main.ts` untouched per decision A9 (still reads `process.env.PORT` until
+  T3). Docs: new "Environment configuration" section in `docs/app-setup.md`.
 
 - 2026-09-13: Scaffolded NestJS 11 foundation (T1 of TODO-02): root
   `package.json`/lockfile, `tsconfig{,.build}.json`, `nest-cli.json`,
@@ -40,13 +53,14 @@ tooling configs). T2 (§2 validated configuration module) is next.
 
 ## Immediate Next Steps
 
-1. TODO-02 T2: `src/config/env.validation.ts` + global `ConfigModule.forRoot`
-   with fail-fast validation (`PORT`, `NUMERATOR_API_URL`, `JSON_SERVER_URL`,
-   `API_KEY`, `NODE_ENV`, per tech.md env table).
-2. TODO-02 T3: harden `main.ts` bootstrap — helmet, CORS, morgan, global
-   `ValidationPipe`, URI versioning, Swagger, `ConfigService`-driven port.
-3. TODO-02 T4: public unversioned `HEAD /health/ping` module.
-4. TODO-02 T5: global `ApiKeyGuard` (`x-api-key`, 401) + `@Public()` +
-   Swagger security scheme; then the `brief.md` §6 module folders land.
-5. Later TODOs: transactions/receivables orchestration, Numerator CAS client,
-   json-server client, unit + e2e test suites (see `brief.md` §3).
+1. TODO-02 T3: harden `main.ts` bootstrap — helmet, CORS (`CORS_ORIGINS` via
+   `ConfigKeys`), morgan, global `ValidationPipe`, URI versioning, Swagger
+   (gated by `SWAGGER_ENABLED`), `ConfigService`-driven PORT (replace the
+   temporary `process.env.PORT` + `DEFAULT_PORT` read per decision A9).
+2. TODO-02 T4: public unversioned `HEAD /health/ping` module.
+3. TODO-02 T5: global `ApiKeyGuard` (`x-api-key`, 401, reads
+   `ConfigKeys.ApiKey`) + `@Public()` + Swagger security scheme; then the
+   `brief.md` §6 module folders land.
+4. Later TODOs: transactions/receivables orchestration, Numerator CAS client
+   (`ConfigKeys.NumeratorApiUrl`), json-server client (`ConfigKeys.JsonServerUrl`),
+   unit + e2e test suites (see `brief.md` §3).

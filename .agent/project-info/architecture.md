@@ -9,14 +9,27 @@
 > the minimal `src/main.ts` + `src/app.module.ts` scaffold now exist; the
 > `src/`-empty note above is superseded by that skeleton only — every module
 > and pattern described below remains planned, not yet implemented.
+>
+> 2026-09-13 update (TODO-02 T2): the `src/config/` block below is now
+> **implemented** and differs from the original plan: it ships as
+> `env.validation.ts` (class-validator schema + `validateEnv()`, consumed by
+> `ConfigModule.forRoot({ isGlobal, cache, validate })` in `app.module.ts`;
+> startup aborts fail-fast on missing/invalid vars, and env URLs must include
+> a protocol per plan addendum A4-R) plus `config.keys.ts` (`ConfigKeys` —
+> the canonical key names all `ConfigService` consumers must use). The planned
+> `configuration.ts` was intentionally NOT created (T2 decision A8: no
+> consumer yet; add it only if a later TODO requires it), and the planned
+> `validation.ts` shipped under the TODO-mandated name `env.validation.ts`.
+> Later tasks must stay consistent with these names. Everything else below
+> remains planned.
 
 ## Modular NestJS Layout (target)
 
 ```text
 src/
-├── config/                 # Validated environment config
-│   ├── configuration.ts    # Loads .env values into a typed object
-│   └── validation.ts       # class-validator schema for env vars
+├── config/                 # Validated environment config (implemented, T2)
+│   ├── config.keys.ts      # ConfigKeys: canonical env key names for ConfigService
+│   └── env.validation.ts   # class-validator schema + fail-fast validateEnv()
 ├── common/                 # Cross-cutting concerns
 │   ├── guards/             # ApiKeyGuard (x-api-key header)
 │   ├── filters/            # Global exception filter (structured errors)

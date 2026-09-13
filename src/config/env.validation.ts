@@ -1,11 +1,27 @@
 /**
- * Validated environment schema consumed by `ConfigModule.forRoot({ validate })`.
+ * Validated environment schema (TODO-02 §2) consumed by
+ * `ConfigModule.forRoot({ validate })` — registered global + cached in
+ * `src/app.module.ts`.
  *
- * Every variable a process env/dotenv supplies arrives as a raw STRING, so the
- * `PORT` coercion is done explicitly with class-transformer's `@Type`
- * decorator instead of scattered `parseInt` calls. Validation runs at
- * bootstrap and throwing here prevents the application from starting (see
- * `@nestjs/config` ConfigModuleOptions.validate contract).
+ * Fail-fast contract: validation runs during bootstrap; any missing or invalid
+ * variable throws a single error naming every offending variable, so the app
+ * refuses to start. Values arriving from process.env/dotenv are raw STRINGS;
+ * `PORT` is coerced explicitly with class-transformer's `@Type` (never
+ * scattered `parseInt`), and ConfigService serves this validated, coerced
+ * instance app-wide (see `@nestjs/config` ConfigModuleOptions.validate).
+ *
+ * AI-agent guidance:
+ * - Read config via `ConfigService` + `ConfigKeys` (`src/config/config.keys.ts`),
+ *   never literal key strings. Exception until T3: `main.ts` still reads
+ *   `process.env.PORT` directly (TODO-02 §3 replaces it with ConfigService).
+ * - Consumption map: PORT / CORS_ORIGINS / SWAGGER_ENABLED → `main.ts`
+ *   bootstrap (T3); API_KEY → ApiKeyGuard (T5); NUMERATOR_API_URL /
+ *   JSON_SERVER_URL → external-service clients (later TODOs). All are
+ *   *validated* now, even before their consumers land.
+ * - URL fields require a protocol (`require_protocol`, plan addendum A4-R):
+ *   protocol-less garbage fails at startup instead of at the first HTTP call.
+ * - Adding a required field here also requires updating `.env.example` and
+ *   `docs/app-setup.md`, otherwise every existing local `.env` fails to boot.
  */
 import { Transform, Type, plainToInstance } from 'class-transformer';
 import {
@@ -29,6 +45,11 @@ export enum NodeEnvironment {
   Test = 'test',
 }
 
+/**
+ * Single source of truth for the variables the app requires/accepts. Public
+ * props are intentional (data holder read by ConfigService — justified
+ * exception to the private-by-default rule).
+ */
 class EnvironmentVariables {
   @IsEnum(NodeEnvironment)
   NODE_ENV: NodeEnvironment;
@@ -48,11 +69,13 @@ class EnvironmentVariables {
   @IsNotEmpty()
   API_KEY: string;
 
+  /** Optional; absent keeps the initializer `true` (T3 gates `/docs` on it). */
   @IsOptional()
   @Transform(({ value }) => transformBoolString(value))
   @IsBoolean()
   SWAGGER_ENABLED: boolean = true;
 
+  /** Optional; absent ⇒ all origins allowed (T3 CORS reads this allowlist). */
   @IsOptional()
   @IsString()
   CORS_ORIGINS: string;

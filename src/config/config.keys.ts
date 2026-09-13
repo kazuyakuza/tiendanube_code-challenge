@@ -1,13 +1,18 @@
 /**
  * Canonical environment-variable key names exposed by ConfigService.
  *
- * Use `ConfigKeys.*` (via `configService.get(ConfigKeys.PORT)`) instead of
- * literal key strings so that a renamed variable is caught by the compiler
- * and instruments stay typo-free. The values must match the keys declared in
- * `src/config/env.validation.ts` and documented in `.env.example`.
+ * AI-agent guidance: always read config via
+ * `configService.get(ConfigKeys.Port)` — never literal key strings — so a
+ * renamed variable is caught by the compiler and consumers stay typo-free.
+ * Values must match, field by field, the keys declared in
+ * `src/config/env.validation.ts` (validated at bootstrap) and documented in
+ * `.env.example` / `docs/app-setup.md`. No consumer reads these yet: the
+ * temporary `process.env.PORT` in `main.ts` is replaced by
+ * `ConfigKeys.Port` in T3.
  *
- * Consumers: main.ts bootstrap (T3), api-key guard (T5), external-service
- * clients (later TODOs).
+ * Consumption map: Port / CorsOrigins / SwaggerEnabled → main.ts bootstrap
+ * (TODO-02 §3, T3); ApiKey → ApiKeyGuard (§5, T5); NumeratorApiUrl /
+ * JsonServerUrl → external-service clients (later TODOs).
  */
 export const ConfigKeys = {
   NodeEnv: 'NODE_ENV',
@@ -19,4 +24,5 @@ export const ConfigKeys = {
   CorsOrigins: 'CORS_ORIGINS',
 } as const;
 
+/** Union of the valid key literals; use it to type key parameters/maps. */
 export type ConfigKey = (typeof ConfigKeys)[keyof typeof ConfigKeys];
