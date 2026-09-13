@@ -12,7 +12,8 @@
  *
  * Consumption map: Port / NodeEnv / CorsOrigins / SwaggerEnabled → main.ts
  * bootstrap (TODO-02 §3, implemented, per plan addendum A3-R); ApiKey →
- * ApiKeyGuard (§5, T5); NumeratorApiUrl /
+ * global ApiKeyGuard (§5, T5, implemented — `src/common/guards/api-key.guard.ts`,
+ * registered via `APP_GUARD` in `app.module.ts`); NumeratorApiUrl /
  * JsonServerUrl → external-service clients (later TODOs).
  */
 export const ConfigKeys = {

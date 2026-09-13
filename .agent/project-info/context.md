@@ -4,16 +4,39 @@
 
 ## Current Work Focus
 
-TODO-02 "Project Foundation" (`.agent/todos/20260913/20260913-todo-2.md`) in
-progress on branch `feat/project-foundation`. T1 (§1 scaffold), T2 (§2
-validated configuration), T3 (§3 hardened `main.ts` bootstrap: helmet,
-env-driven CORS, morgan, global ValidationPipe, URI versioning, Swagger at
-`/docs` gated by `SWAGGER_ENABLED`, validated `ConfigService` PORT) and T4
-(§4 public unversioned `HEAD /health/ping` — `200` with empty body,
-unversioned via `VERSION_NEUTRAL`) are done. T5 (§5 global API-key guard +
-`@Public()` + Swagger security scheme) is the last task of TODO-02.
+TODO-02 "Project Foundation" (`.agent/todos/20260913/20260913-todo-2.md`):
+**all five tasks implemented** on branch `feat/project-foundation`; **only
+Critical Workflow step 5 (merge to `main` + push) is pending**. T1 (§1
+scaffold), T2 (§2 validated configuration), T3 (§3 hardened `main.ts`
+bootstrap), T4 (§4 unversioned `HEAD /health/ping`) and T5 (§5 global
+API-key guard + `@Public()` + Swagger security scheme) are coded and
+committed. TODO-file bookkeeping: tasks 1–4 already carry `[DONE]`; §5
+awaits T5's 4.5b verification and 4.6 `[DONE]` mark, which precede the step
+5 merge.
 
 ## Recent Changes
+
+- 2026-09-13: Global API-key guard (T5 of TODO-02, commit 4ac069f):
+  `ApiKeyGuard` (`src/common/guards/api-key.guard.ts`) registered app-wide
+  via the `APP_GUARD` provider in `app.module.ts`. Every matched route must
+  send `x-api-key` matching env `API_KEY` exactly (plain `===` compare per
+  plan G9 — no crypto/timing hardening); missing/wrong key
+  → **401** `UnauthorizedException('Missing or invalid x-api-key header')`
+  (guard returning `false` would yield 403 — deliberate throw). New
+  `@Public()` decorator + shared `IS_PUBLIC_KEY` const
+  (`src/common/decorators/public.decorator.ts`), read by the guard via
+  `Reflector.getAllAndOverride([handler, class])`, exempts
+  `HEAD /health/ping`. Wire-format constants live in
+  `src/common/api-key.constants.ts` (`API_KEY_HEADER`, Swagger scheme name
+  `API-Key`). Swagger `setupSwagger` adds the `apiKey` scheme +
+  document-level security requirement → working **Authorize** button;
+  "Try it out" now sends the header (padlock on the public probe is
+  cosmetic — T5 decision D10). Guard proven per G10 with a temporary
+  protected route that was deleted, never committed. Plan fix recorded:
+  the T5 §6 snippet originally imported `APP_GUARD` from `@nestjs/common`;
+  it is exported by **`@nestjs/core`** (correction now annotated in the
+  plan file). Docs: guard section + Swagger authoring how-to in
+  `docs/app-setup.md`; stale "guard not implemented" JSDoc sweeps landed.
 
 - 2026-09-13: Public unversioned health probe (T4 of TODO-02, commits f2ee009
   + 7bf9128): new `src/health/` module — `HealthModule` + `HealthController`
@@ -82,17 +105,18 @@ unversioned via `VERSION_NEUTRAL`) are done. T5 (§5 global API-key guard +
 
 ## Immediate Next Steps
 
-1. TODO-02 T5 (last task): global `ApiKeyGuard` (`x-api-key`, 401, reads
-   `ConfigKeys.ApiKey`) + `@Public()` decorator + Swagger security scheme
-   (extend the `DocumentBuilder` chain in `main.ts` `setupSwagger` — reserved
-   extension point). `HealthController` MUST get `@Public()` so
-   `HEAD /health/ping` keeps answering once the guard lands (today it is
-   public only because no guard exists); then the `brief.md` §6 module
-   folders land.
-2. Later TODOs: transactions/receivables orchestration, Numerator CAS client
-   (`ConfigKeys.NumeratorApiUrl`), json-server client (`ConfigKeys.JsonServerUrl`),
-   unit + e2e test suites (see `brief.md` §3).
-3. After TODO-02 closes: user-owned future TODO files
-   `.agent/todos/20260913/20260913-todo-3.md` and
-   `.agent/todos/20260913/20260913-todo-4.md` exist **UNTRACKED** (kept out of
-   this workflow and its commits; the user owns them).
+1. T5 closeout (this workflow): step 4.5b plan-adherence verification, then
+   step 4.6 `[DONE]` mark for §5 of the TODO file.
+2. Critical Workflow step 5 (TODO-02 completion): rename
+   `.agent/todos/20260913/20260913-todo-2.md` with the `-DONE` suffix,
+   merge `feat/project-foundation` into `main`, delete the feature branch,
+   push `main` to `origin` only.
+3. Later features (future TODOs, NOT this workflow): transactions/receivables
+   orchestration — their `/v1` routes are protected by the now-global
+   `ApiKeyGuard` automatically (public only with `@Public()`) — Numerator CAS
+   client (`ConfigKeys.NumeratorApiUrl`), json-server client
+   (`ConfigKeys.JsonServerUrl`), unit + e2e test suites (see `brief.md` §3).
+4. User-owned future TODO files `.agent/todos/20260913/20260913-todo-3.md`
+   and `.agent/todos/20260913/20260913-todo-4.md` exist **UNTRACKED** —
+   kept out of this workflow and its commits, the user owns them; they are
+   not our next steps.

@@ -17,9 +17,10 @@
  * - Consumption map: PORT / NODE_ENV / CORS_ORIGINS / SWAGGER_ENABLED →
  *   `main.ts` bootstrap (T3, implemented; required keys via `getOrThrow`,
  *   `SWAGGER_ENABLED` via `get(key, true)` — plan addendum A3-R); API_KEY →
- *   ApiKeyGuard (T5, not yet implemented); NUMERATOR_API_URL /
- *   JSON_SERVER_URL → external-service clients (later TODOs). All seven are
- *   *validated* at bootstrap even where no consumer has landed yet.
+ *   global ApiKeyGuard (T5, implemented — `src/common/guards/api-key.guard.ts`,
+ *   read via `getOrThrow`); NUMERATOR_API_URL /
+ *   JSON_SERVER_URL → external-service clients (later TODOs — the only keys
+ *   still without a consumer). All seven are *validated* at bootstrap.
  * - URL fields require a protocol (`require_protocol`, plan addendum A4-R):
  *   protocol-less garbage fails at startup instead of at the first HTTP call.
  * - Adding a required field here also requires updating `.env.example` and

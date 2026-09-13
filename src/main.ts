@@ -27,7 +27,7 @@ import { API_KEY_HEADER, API_KEY_SECURITY_SCHEME } from './common/api-key.consta
 import { ConfigKeys } from './config/config.keys';
 import { NodeEnvironment } from './config/env.validation';
 
-/** DocumentBuilder metadata (TODO-02 §3.5). T5 (§5.3) adds the x-api-key scheme. */
+/** DocumentBuilder metadata (TODO-02 §3.5); the x-api-key scheme landed in T5 (§5.3). */
 const SWAGGER_TITLE = 'Tiendanube Code Challenge — Orchestration API';
 const SWAGGER_DESCRIPTION =
   'NestJS orchestration API that coordinates the external services of the Tiendanube code challenge.';

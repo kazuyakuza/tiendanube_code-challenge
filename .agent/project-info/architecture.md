@@ -52,7 +52,27 @@
 > (deliberate, T4 decision C). It is public **only because no guard exists
 > yet**: T5 registers the global API-key guard and must exempt this route
 > with `@Public()` (see "Security" below — still planned). Details:
-> `docs/app-setup.md`.
+> `docs/app-setup.md`. *(For T5 superseding this paragraph's "guard
+> planned" state, see the T5 update below.)*
+>
+> 2026-09-13 update (TODO-02 T5): the **Security** §guard is now
+> **implemented** per this design ("Security" below is live, not planned):
+> `ApiKeyGuard` (`src/common/guards/api-key.guard.ts`) registered globally in
+> `app.module.ts` via the `APP_GUARD` token — note: the token is exported by
+> `@nestjs/core`, not `@nestjs/common` (plan-code correction recorded in T5
+> plan §6). Missing/wrong `x-api-key` → **401**
+> `UnauthorizedException('Missing or invalid x-api-key header')`; exact
+> string compare vs `API_KEY` (global-plan G9 rationale; a guard
+> `return false` would wrongly produce 403). `HEAD /health/ping` is exempted
+> by method-level `@Public()` (`src/common/decorators/public.decorator.ts`,
+> shared `IS_PUBLIC_KEY` read via `Reflector.getAllAndOverride`). Swagger
+> exposes the `API-Key` apiKey scheme (header `x-api-key`, constants in
+> `src/common/api-key.constants.ts`) plus a document-level security
+> requirement, so the Authorize button works (D10: padlock on the public
+> probe is cosmetic). No placeholder protected route is committed (G10 —
+> verification used a throwaway route, T5 plan §10). `common/filters/` and
+> `common/interceptors/` remain **planned**; the first real `/v1` protected
+> routes arrive in later TODOs. Details: `docs/app-setup.md`.
 
 ## Modular NestJS Layout (target)
 
@@ -61,11 +81,13 @@ src/
 ├── config/                 # Validated environment config (implemented, T2)
 │   ├── config.keys.ts      # ConfigKeys: canonical env key names for ConfigService
 │   └── env.validation.ts   # class-validator schema + fail-fast validateEnv()
-├── common/                 # Cross-cutting concerns
-│   ├── guards/             # ApiKeyGuard (x-api-key header)
-│   ├── filters/            # Global exception filter (structured errors)
-│   └── interceptors/       # Logging/response conventions
-├── health/                 # HEAD /health/ping — public liveness probe (implemented, T4)
+├── common/                 # Cross-cutting concerns (guards/decorators implemented, T5)
+│   ├── api-key.constants.ts # API_KEY_HEADER + Swagger scheme name (implemented, T5)
+│   ├── decorators/         # public.decorator.ts — @Public() + IS_PUBLIC_KEY (implemented, T5)
+│   ├── guards/             # api-key.guard.ts — global ApiKeyGuard, exact x-api-key match, 401 on missing/wrong (implemented, T5; registered via APP_GUARD from @nestjs/core)
+│   ├── filters/            # Global exception filter (structured errors) — planned
+│   └── interceptors/       # Logging/response conventions — planned
+├── health/                 # HEAD /health/ping — public liveness probe (implemented, T4; @Public()-exempt since T5)
 ├── transactions/           # Main orchestration module
 │   ├── dto/                # CreateTransactionRequest, response DTOs
 │   ├── transactions.controller.ts
@@ -73,8 +95,8 @@ src/
 │   └── fee-rules.ts        # debit/credit fee map + date/status policy
 ├── numerator/              # Numerator API client + CAS retry logic
 ├── json-server/            # json-server HTTP client (transactions/receivables)
-├── main.ts                 # Bootstrap: helmet, CORS, morgan, versioning, Swagger
-└── app.module.ts           # Wires all modules
+├── main.ts                 # Bootstrap: helmet, CORS, morgan, versioning, Swagger (API-Key scheme since T5)
+└── app.module.ts           # Wires all modules + global APP_GUARD (ApiKeyGuard, T5)
 ```
 
 ## Request Data Flow — POST /v1/transactions
@@ -124,6 +146,13 @@ src/
 - `ApiKeyGuard` registered globally; `@Public()` decorator exempts
   `/health/ping`.
 - Header: `x-api-key` compared against `API_KEY` env var.
+- **Status (T5, 2026-09-13): implemented as listed above.** Global
+  registration = `APP_GUARD` provider (`@nestjs/core`) in `app.module.ts`;
+  rejection = thrown `UnauthorizedException` → **401** (never `return
+  false`, which Nest maps to 403); compare = exact `===` (G9 scope);
+  exemption = `IS_PUBLIC_KEY` metadata via `Reflector`. Swagger `API-Key`
+  scheme + document-level requirement back the Authorize button (TODO §5.3).
+  Runbook and curl examples: `docs/app-setup.md` ("The API key guard").
 
 ## Error & Response Conventions
 

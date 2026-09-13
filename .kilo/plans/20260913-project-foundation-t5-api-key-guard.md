@@ -221,7 +221,9 @@ Replace the **entire file** with:
  * `APP_GUARD` token, so every route requires the `x-api-key` header unless
  * exempted with `@Public()`. Run guide: `docs/app-setup.md`.
  */
-import { APP_GUARD, Module } from '@nestjs/common';
+// Correction (2026-09-13, post-review): APP_GUARD is exported by @nestjs/core, not @nestjs/common.
+import { Module } from '@nestjs/common';
+import { APP_GUARD } from '@nestjs/core';
 import { ConfigModule } from '@nestjs/config';
 import { ApiKeyGuard } from './common/guards/api-key.guard';
 import { validateEnv } from './config/env.validation';
