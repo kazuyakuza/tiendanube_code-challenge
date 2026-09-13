@@ -51,8 +51,8 @@ The system must:
 | `debit_card`   | 2%   | `paid`            | Same day (D+0)    |
 | `credit_card`  | 4%   | `waiting_funds`   | Creation + 30 days|
 
-- `discount` = fee amount (not percentage)
-- `total` = `subtotal - discount`
+- `discount` = fee percentage (debit_card → "2", credit_card → "4", stored as string)
+- `total` = `subtotal × (1 − discount/100)` (fee deducted from the transaction total)
 - Card number must be stored and returned **masked** (only last 4 digits).
 
 ### 3.3 ID Generation Strategy
