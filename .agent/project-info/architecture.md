@@ -3,19 +3,91 @@
 > STATUS: **Planned, not yet implemented.** `src/` is empty. This document
 > describes the target design that follows `brief.md` §6. Update after
 > implementation.
+>
+> 2026-09-13 update (TODO-02 T1): §1-level project-root configs
+> (`package.json`, tsconfig/eslint/jest, `nest-cli.json`, `.env.example`) plus
+> the minimal `src/main.ts` + `src/app.module.ts` scaffold now exist; the
+> `src/`-empty note above is superseded by that skeleton only — every module
+> and pattern described below remains planned, not yet implemented.
+>
+> 2026-09-13 update (TODO-02 T2): the `src/config/` block below is now
+> **implemented** and differs from the original plan: it ships as
+> `env.validation.ts` (class-validator schema + `validateEnv()`, consumed by
+> `ConfigModule.forRoot({ isGlobal, cache, validate })` in `app.module.ts`;
+> startup aborts fail-fast on missing/invalid vars, and env URLs must include
+> a protocol per plan addendum A4-R) plus `config.keys.ts` (`ConfigKeys` —
+> the canonical key names all `ConfigService` consumers must use). The planned
+> `configuration.ts` was intentionally NOT created (T2 decision A8: no
+> consumer yet; add it only if a later TODO requires it), and the planned
+> `validation.ts` shipped under the TODO-mandated name `env.validation.ts`.
+> Later tasks must stay consistent with these names. Everything else below
+> remains planned.
+>
+> 2026-09-13 update (TODO-02 T3): the `main.ts` "Bootstrap" concern is now
+> **implemented** — security/logging/validation/versioning/docs, all
+> env-driven: helmet defaults on every response; CORS via `CORS_ORIGINS`
+> (CSV allowlist, absent/blank ⇒ allow-all dev default); morgan with a
+> `NODE_ENV`-conditional format (`dev` in development, `combined` otherwise,
+> incl. the 404s of this stage); global `ValidationPipe`
+> (whitelist/forbidNonWhitelisted/transform); URI versioning
+> `defaultVersion: '1'` with **no** `setGlobalPrefix` (this supersedes the
+> "`setGlobalPrefix` + `enableVersioning`" phrase in the "API Versioning"
+> section, whose text stands as original planning); Swagger UI at `/docs`,
+> gated by `SWAGGER_ENABLED` (absent ⇒ enabled); listen PORT read through the
+> validated `ConfigService` (A3-R: required keys via `getOrThrow`,
+> `SWAGGER_ENABLED` via `get(key, default)`). No exception filters or
+> interceptors exist yet, no route is served besides `/docs`, and health (§
+> "HEAD /health/ping") plus the API-key guard remain **planned**; their code
+> lives in `common/` + `health/` per the layout below, which T4/T5 will
+> create. Details: `docs/app-setup.md` ("API behavior at this stage").
+>
+> 2026-09-13 update (TODO-02 T4): the `health/` block is now **implemented**
+> as designed — `src/health/health.module.ts` + `health.controller.ts` serve
+> `HEAD /health/ping` with `200 OK` and an empty body. Unversioning mechanism
+> (supersedes both the "`@SkipVersioncheck()`" phrase of global-plan G8 and
+> the T3 note above): `version: VERSION_NEUTRAL` set on the
+> `@Controller({...})` metadata itself (decision G8-R — the installed
+> NestJS 11.2.3 exposes no `@SkipVersioncheck()`), so `main.ts` needed no
+> health-specific code. Swagger lists the probe as a `head` operation
+> (deliberate, T4 decision C). It is public **only because no guard exists
+> yet**: T5 registers the global API-key guard and must exempt this route
+> with `@Public()` (see "Security" below — still planned). Details:
+> `docs/app-setup.md`. *(For T5 superseding this paragraph's "guard
+> planned" state, see the T5 update below.)*
+>
+> 2026-09-13 update (TODO-02 T5): the **Security** §guard is now
+> **implemented** per this design ("Security" below is live, not planned):
+> `ApiKeyGuard` (`src/common/guards/api-key.guard.ts`) registered globally in
+> `app.module.ts` via the `APP_GUARD` token — note: the token is exported by
+> `@nestjs/core`, not `@nestjs/common` (plan-code correction recorded in T5
+> plan §6). Missing/wrong `x-api-key` → **401**
+> `UnauthorizedException('Missing or invalid x-api-key header')`; exact
+> string compare vs `API_KEY` (global-plan G9 rationale; a guard
+> `return false` would wrongly produce 403). `HEAD /health/ping` is exempted
+> by method-level `@Public()` (`src/common/decorators/public.decorator.ts`,
+> shared `IS_PUBLIC_KEY` read via `Reflector.getAllAndOverride`). Swagger
+> exposes the `API-Key` apiKey scheme (header `x-api-key`, constants in
+> `src/common/api-key.constants.ts`) plus a document-level security
+> requirement, so the Authorize button works (D10: padlock on the public
+> probe is cosmetic). No placeholder protected route is committed (G10 —
+> verification used a throwaway route, T5 plan §10). `common/filters/` and
+> `common/interceptors/` remain **planned**; the first real `/v1` protected
+> routes arrive in later TODOs. Details: `docs/app-setup.md`.
 
 ## Modular NestJS Layout (target)
 
 ```text
 src/
-├── config/                 # Validated environment config
-│   ├── configuration.ts    # Loads .env values into a typed object
-│   └── validation.ts       # class-validator schema for env vars
-├── common/                 # Cross-cutting concerns
-│   ├── guards/             # ApiKeyGuard (x-api-key header)
-│   ├── filters/            # Global exception filter (structured errors)
-│   └── interceptors/       # Logging/response conventions
-├── health/                 # HEAD /health/ping — public liveness probe
+├── config/                 # Validated environment config (implemented, T2)
+│   ├── config.keys.ts      # ConfigKeys: canonical env key names for ConfigService
+│   └── env.validation.ts   # class-validator schema + fail-fast validateEnv()
+├── common/                 # Cross-cutting concerns (guards/decorators implemented, T5)
+│   ├── api-key.constants.ts # API_KEY_HEADER + Swagger scheme name (implemented, T5)
+│   ├── decorators/         # public.decorator.ts — @Public() + IS_PUBLIC_KEY (implemented, T5)
+│   ├── guards/             # api-key.guard.ts — global ApiKeyGuard, exact x-api-key match, 401 on missing/wrong (implemented, T5; registered via APP_GUARD from @nestjs/core)
+│   ├── filters/            # Global exception filter (structured errors) — planned
+│   └── interceptors/       # Logging/response conventions — planned
+├── health/                 # HEAD /health/ping — public liveness probe (implemented, T4; @Public()-exempt since T5)
 ├── transactions/           # Main orchestration module
 │   ├── dto/                # CreateTransactionRequest, response DTOs
 │   ├── transactions.controller.ts
@@ -23,8 +95,8 @@ src/
 │   └── fee-rules.ts        # debit/credit fee map + date/status policy
 ├── numerator/              # Numerator API client + CAS retry logic
 ├── json-server/            # json-server HTTP client (transactions/receivables)
-├── main.ts                 # Bootstrap: helmet, CORS, morgan, versioning, Swagger
-└── app.module.ts           # Wires all modules
+├── main.ts                 # Bootstrap: helmet, CORS, morgan, versioning, Swagger (API-Key scheme since T5)
+└── app.module.ts           # Wires all modules + global APP_GUARD (ApiKeyGuard, T5)
 ```
 
 ## Request Data Flow — POST /v1/transactions
@@ -74,6 +146,13 @@ src/
 - `ApiKeyGuard` registered globally; `@Public()` decorator exempts
   `/health/ping`.
 - Header: `x-api-key` compared against `API_KEY` env var.
+- **Status (T5, 2026-09-13): implemented as listed above.** Global
+  registration = `APP_GUARD` provider (`@nestjs/core`) in `app.module.ts`;
+  rejection = thrown `UnauthorizedException` → **401** (never `return
+  false`, which Nest maps to 403); compare = exact `===` (G9 scope);
+  exemption = `IS_PUBLIC_KEY` metadata via `Reflector`. Swagger `API-Key`
+  scheme + document-level requirement back the Authorize button (TODO §5.3).
+  Runbook and curl examples: `docs/app-setup.md` ("The API key guard").
 
 ## Error & Response Conventions
 

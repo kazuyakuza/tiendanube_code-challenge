@@ -4,11 +4,84 @@
 
 ## Current Work Focus
 
-Bootstrapping the project information set and the NestJS application defined in
-`brief.md`. No application code exists yet: `src/` contains only `.gitkeep`.
+TODO-02 "Project Foundation" (`.agent/todos/20260913/20260913-todo-2.md`):
+**all five tasks implemented** on branch `feat/project-foundation`; **only
+Critical Workflow step 5 (merge to `main` + push) is pending**. T1 (§1
+scaffold), T2 (§2 validated configuration), T3 (§3 hardened `main.ts`
+bootstrap), T4 (§4 unversioned `HEAD /health/ping`) and T5 (§5 global
+API-key guard + `@Public()` + Swagger security scheme) are coded and
+committed. TODO-file bookkeeping: tasks 1–4 already carry `[DONE]`; §5
+awaits T5's 4.5b verification and 4.6 `[DONE]` mark, which precede the step
+5 merge.
 
 ## Recent Changes
 
+- 2026-09-13: Global API-key guard (T5 of TODO-02, commit 4ac069f):
+  `ApiKeyGuard` (`src/common/guards/api-key.guard.ts`) registered app-wide
+  via the `APP_GUARD` provider in `app.module.ts`. Every matched route must
+  send `x-api-key` matching env `API_KEY` exactly (plain `===` compare per
+  plan G9 — no crypto/timing hardening); missing/wrong key
+  → **401** `UnauthorizedException('Missing or invalid x-api-key header')`
+  (guard returning `false` would yield 403 — deliberate throw). New
+  `@Public()` decorator + shared `IS_PUBLIC_KEY` const
+  (`src/common/decorators/public.decorator.ts`), read by the guard via
+  `Reflector.getAllAndOverride([handler, class])`, exempts
+  `HEAD /health/ping`. Wire-format constants live in
+  `src/common/api-key.constants.ts` (`API_KEY_HEADER`, Swagger scheme name
+  `API-Key`). Swagger `setupSwagger` adds the `apiKey` scheme +
+  document-level security requirement → working **Authorize** button;
+  "Try it out" now sends the header (padlock on the public probe is
+  cosmetic — T5 decision D10). Guard proven per G10 with a temporary
+  protected route that was deleted, never committed. Plan fix recorded:
+  the T5 §6 snippet originally imported `APP_GUARD` from `@nestjs/common`;
+  it is exported by **`@nestjs/core`** (correction now annotated in the
+  plan file). Docs: guard section + Swagger authoring how-to in
+  `docs/app-setup.md`; stale "guard not implemented" JSDoc sweeps landed.
+
+- 2026-09-13: Public unversioned health probe (T4 of TODO-02, commits f2ee009
+  + 7bf9128): new `src/health/` module — `HealthModule` + `HealthController`
+  answering `HEAD /health/ping` with `200 OK` and an empty body. Unversioned
+  via `version: VERSION_NEUTRAL` on the controller metadata (G8-R: the
+  global-plan `@SkipVersioncheck()` does not exist in the installed
+  `@nestjs/common`; no `main.ts` change needed). Public **by absence of any
+  guard** — when T5 lands, `HealthController` must get `@Public()` to stay
+  reachable. Swagger lists the probe (T4 decision C); simplify step moved the
+  curl how-to into the `ping()` JSDoc. Docs: "API behavior at this stage" in
+  `docs/app-setup.md` corrected (health answers; every other route public
+  until T5).
+
+- 2026-09-13: Hardened application bootstrap (T3 of TODO-02, commits 84bfb15
+  + 7c78932): `src/main.ts` wires helmet defaults, env-driven CORS
+  (`CORS_ORIGINS` CSV allowlist; absent/blank ⇒ allow all), morgan
+  (`NODE_ENV`-conditional format: `dev` in development, `combined`
+  otherwise), a global `ValidationPipe`
+  (whitelist/forbidNonWhitelisted/transform), URI versioning
+  `defaultVersion: '1'` (no `setGlobalPrefix`), Swagger UI at `/docs` gated
+  by `SWAGGER_ENABLED`, and listens on the validated PORT. All env reads go
+  through `ConfigService` + `ConfigKeys` per plan addendum A3-R
+  (`getOrThrow` for required keys; `get(key, default)` for `SWAGGER_ENABLED`);
+  simplify step S1 folded `splitOrigins` into `resolveCorsOrigins`. Docs: new
+  "API behavior at this stage" section in `docs/app-setup.md` (everything
+  404s except `/docs` — no controllers yet).
+
+- 2026-09-13: Validated configuration module (T2 of TODO-02):
+  `src/config/env.validation.ts` (class-validator schema — 5 required vars
+  `NODE_ENV`/`PORT`/`NUMERATOR_API_URL`/`JSON_SERVER_URL`/`API_KEY` + optional
+  `SWAGGER_ENABLED`/`CORS_ORIGINS`; URL fields require a protocol per plan
+  addendum A4-R, so protocol-less base URLs fail at startup) and
+  `src/config/config.keys.ts` (`ConfigKeys` constants for later consumers);
+  global `ConfigModule.forRoot({ isGlobal, cache, validate })` in
+  `AppModule`; fail-fast bootstrap error names every offending variable.
+  `main.ts` untouched per decision A9 (still reads `process.env.PORT` until
+  T3 — that temporary read is gone, superseded by the T3 entry above). Docs:
+  new "Environment configuration" section in `docs/app-setup.md`.
+
+- 2026-09-13: Scaffolded NestJS 11 foundation (T1 of TODO-02): root
+  `package.json`/lockfile, `tsconfig{,.build}.json`, `nest-cli.json`,
+  `eslint.config.mjs`, `test/jest-e2e.json`, minimal `src/main.ts` +
+  `src/app.module.ts`, `.env.example` (+ local `.env`), `.gitignore`
+  `coverage/`; build/lint/tests verified exit 0. Run guide:
+  `docs/app-setup.md`.
 - 2026-09-13: Project info initialized. Created `product.md`, `context.md`,
   `architecture.md`, `tech.md`; removed `.initialized` marker; fixed
   `brief.md` §3.2 Fee Rules.
@@ -32,12 +105,18 @@ Bootstrapping the project information set and the NestJS application defined in
 
 ## Immediate Next Steps
 
-1. Scaffold the NestJS app per `brief.md` §6 structure (modules: `config`,
-   `common`, `health`, `transactions`, `numerator`, `json-server`).
-2. Configure environment validation (`@nestjs/config` + class-validator) for
-   `PORT`, `NUMERATOR_API_URL`, `JSON_SERVER_URL`, `API_KEY`, `NODE_ENV`.
-3. Implement Numerator client with test-and-set CAS retry loop (see
-   `architecture.md`).
-4. Implement `POST /v1/transactions` orchestration + receivable fee rules.
-5. Add security (helmet, CORS, API key guard), morgan logging, Swagger at `/docs`.
-6. Unit + e2e tests (Jest + Supertest).
+1. T5 closeout (this workflow): step 4.5b plan-adherence verification, then
+   step 4.6 `[DONE]` mark for §5 of the TODO file.
+2. Critical Workflow step 5 (TODO-02 completion): rename
+   `.agent/todos/20260913/20260913-todo-2.md` with the `-DONE` suffix,
+   merge `feat/project-foundation` into `main`, delete the feature branch,
+   push `main` to `origin` only.
+3. Later features (future TODOs, NOT this workflow): transactions/receivables
+   orchestration — their `/v1` routes are protected by the now-global
+   `ApiKeyGuard` automatically (public only with `@Public()`) — Numerator CAS
+   client (`ConfigKeys.NumeratorApiUrl`), json-server client
+   (`ConfigKeys.JsonServerUrl`), unit + e2e test suites (see `brief.md` §3).
+4. User-owned future TODO files `.agent/todos/20260913/20260913-todo-3.md`
+   and `.agent/todos/20260913/20260913-todo-4.md` exist **UNTRACKED** —
+   kept out of this workflow and its commits, the user owns them; they are
+   not our next steps.
