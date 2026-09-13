@@ -3,6 +3,12 @@
 > STATUS: **Planned, not yet implemented.** `src/` is empty. This document
 > describes the target design that follows `brief.md` §6. Update after
 > implementation.
+>
+> 2026-09-13 update (TODO-02 T1): §1-level project-root configs
+> (`package.json`, tsconfig/eslint/jest, `nest-cli.json`, `.env.example`) plus
+> the minimal `src/main.ts` + `src/app.module.ts` scaffold now exist; the
+> `src/`-empty note above is superseded by that skeleton only — every module
+> and pattern described below remains planned, not yet implemented.
 
 ## Modular NestJS Layout (target)
 
