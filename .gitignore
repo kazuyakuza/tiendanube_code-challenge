@@ -37,3 +37,6 @@ dist/
 .kilo/agent-manager.json
 
 node_modules
+
+# Test coverage
+coverage/

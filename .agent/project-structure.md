@@ -2,7 +2,8 @@
 
 # Folders in src/
 
-# (no folders yet)
+- src/ - NestJS application root: main.ts bootstrap and root AppModule
+- test/ - e2e Jest config (jest-e2e.json); e2e specs arrive in later TODOs
 
 # Other folders
 
