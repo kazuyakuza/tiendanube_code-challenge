@@ -97,6 +97,13 @@ clients, no unit/e2e test suites in this TODO.**
   `NODE_ENV=development`, `SWAGGER_ENABLED=true`.
 - **G15 — Project-structure maintenance**: after each task creates folders under
   `src/`, update `.agent/project-structure.md` (Update Workflow in WORKFLOWS.md).
+- **G8-R (2026-09-13 CORRIGENDUM, binding; supersedes G8/§T4 wording)**: the decorator
+  `@SkipVersioncheck()` cited in G8/G7-adjacent wording **does not exist** in the
+  installed NestJS 11.2.3 (verified: `grep SkipVersion` over
+  `node_modules/@nestjs/**` → no exports; only `VERSION_NEUTRAL` exists, exported from
+  `@nestjs/common`). Health unversioning MUST use
+  `@Controller({ path: 'health', version: VERSION_NEUTRAL })` instead. All later
+  tasks/plans (T4) bind this mechanism.
 - **G16 — Code rules**: all `.kilo/rules/` apply to every produced file
   (≤200 lines/file, ≤50-line methods, ≤2 params, ≤depth 2, private members by
   default, no commented code, self-documenting names).
