@@ -6,12 +6,26 @@
 
 TODO-02 "Project Foundation" (`.agent/todos/20260913/20260913-todo-2.md`) in
 progress on branch `feat/project-foundation`. T1 (§1 scaffold), T2 (§2
-validated configuration) and T3 (§3 hardened `main.ts` bootstrap: helmet,
+validated configuration), T3 (§3 hardened `main.ts` bootstrap: helmet,
 env-driven CORS, morgan, global ValidationPipe, URI versioning, Swagger at
-`/docs` gated by `SWAGGER_ENABLED`, validated `ConfigService` PORT) are done.
-T4 (§4 public unversioned `HEAD /health/ping`) is next.
+`/docs` gated by `SWAGGER_ENABLED`, validated `ConfigService` PORT) and T4
+(§4 public unversioned `HEAD /health/ping` — `200` with empty body,
+unversioned via `VERSION_NEUTRAL`) are done. T5 (§5 global API-key guard +
+`@Public()` + Swagger security scheme) is the last task of TODO-02.
 
 ## Recent Changes
+
+- 2026-09-13: Public unversioned health probe (T4 of TODO-02, commits f2ee009
+  + 7bf9128): new `src/health/` module — `HealthModule` + `HealthController`
+  answering `HEAD /health/ping` with `200 OK` and an empty body. Unversioned
+  via `version: VERSION_NEUTRAL` on the controller metadata (G8-R: the
+  global-plan `@SkipVersioncheck()` does not exist in the installed
+  `@nestjs/common`; no `main.ts` change needed). Public **by absence of any
+  guard** — when T5 lands, `HealthController` must get `@Public()` to stay
+  reachable. Swagger lists the probe (T4 decision C); simplify step moved the
+  curl how-to into the `ping()` JSDoc. Docs: "API behavior at this stage" in
+  `docs/app-setup.md` corrected (health answers; every other route public
+  until T5).
 
 - 2026-09-13: Hardened application bootstrap (T3 of TODO-02, commits 84bfb15
   + 7c78932): `src/main.ts` wires helmet defaults, env-driven CORS
@@ -68,18 +82,17 @@ T4 (§4 public unversioned `HEAD /health/ping`) is next.
 
 ## Immediate Next Steps
 
-1. TODO-02 T4: public unversioned `HEAD /health/ping` module (note:
-   `@SkipVersioncheck()` from global-plan G8 does not exist in the installed
-   `@nestjs/common` — the unversioning mechanism is `version: VERSION_NEUTRAL`;
-   `src/main.ts` header JSDoc updated accordingly).
-2. TODO-02 T5: global `ApiKeyGuard` (`x-api-key`, 401, reads
-   `ConfigKeys.ApiKey`) + `@Public()` + Swagger security scheme (extend the
-   `DocumentBuilder` chain in `main.ts` `setupSwagger` — reserved extension
-   point); then the `brief.md` §6 module folders land.
-3. Later TODOs: transactions/receivables orchestration, Numerator CAS client
+1. TODO-02 T5 (last task): global `ApiKeyGuard` (`x-api-key`, 401, reads
+   `ConfigKeys.ApiKey`) + `@Public()` decorator + Swagger security scheme
+   (extend the `DocumentBuilder` chain in `main.ts` `setupSwagger` — reserved
+   extension point). `HealthController` MUST get `@Public()` so
+   `HEAD /health/ping` keeps answering once the guard lands (today it is
+   public only because no guard exists); then the `brief.md` §6 module
+   folders land.
+2. Later TODOs: transactions/receivables orchestration, Numerator CAS client
    (`ConfigKeys.NumeratorApiUrl`), json-server client (`ConfigKeys.JsonServerUrl`),
    unit + e2e test suites (see `brief.md` §3).
-4. After TODO-02 closes: user-owned future TODO files
+3. After TODO-02 closes: user-owned future TODO files
    `.agent/todos/20260913/20260913-todo-3.md` and
    `.agent/todos/20260913/20260913-todo-4.md` exist **UNTRACKED** (kept out of
    this workflow and its commits; the user owns them).

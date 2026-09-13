@@ -40,6 +40,19 @@
 > "HEAD /health/ping") plus the API-key guard remain **planned**; their code
 > lives in `common/` + `health/` per the layout below, which T4/T5 will
 > create. Details: `docs/app-setup.md` ("API behavior at this stage").
+>
+> 2026-09-13 update (TODO-02 T4): the `health/` block is now **implemented**
+> as designed — `src/health/health.module.ts` + `health.controller.ts` serve
+> `HEAD /health/ping` with `200 OK` and an empty body. Unversioning mechanism
+> (supersedes both the "`@SkipVersioncheck()`" phrase of global-plan G8 and
+> the T3 note above): `version: VERSION_NEUTRAL` set on the
+> `@Controller({...})` metadata itself (decision G8-R — the installed
+> NestJS 11.2.3 exposes no `@SkipVersioncheck()`), so `main.ts` needed no
+> health-specific code. Swagger lists the probe as a `head` operation
+> (deliberate, T4 decision C). It is public **only because no guard exists
+> yet**: T5 registers the global API-key guard and must exempt this route
+> with `@Public()` (see "Security" below — still planned). Details:
+> `docs/app-setup.md`.
 
 ## Modular NestJS Layout (target)
 
@@ -52,7 +65,7 @@ src/
 │   ├── guards/             # ApiKeyGuard (x-api-key header)
 │   ├── filters/            # Global exception filter (structured errors)
 │   └── interceptors/       # Logging/response conventions
-├── health/                 # HEAD /health/ping — public liveness probe
+├── health/                 # HEAD /health/ping — public liveness probe (implemented, T4)
 ├── transactions/           # Main orchestration module
 │   ├── dto/                # CreateTransactionRequest, response DTOs
 │   ├── transactions.controller.ts

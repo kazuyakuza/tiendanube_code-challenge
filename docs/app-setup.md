@@ -2,13 +2,13 @@
 
 Covers **what the codebase does today**: the NestJS 11 application scaffolded in
 TODO-02 §1 (Project Bootstrap), the validated environment configuration of
-TODO-02 §2 (Configuration Module), and the hardened bootstrap of TODO-02 §3 —
+TODO-02 §2 (Configuration Module), the hardened bootstrap of TODO-02 §3 —
 helmet, env-driven CORS, morgan request logging, a global validation pipe, URI
-versioning and a gated Swagger UI at `/docs` (see
-[API behavior at this stage](#api-behavior-at-this-stage)). The health endpoint
-(§4) and the API-key guard (§5) of `.agent/todos/20260913/20260913-todo-2.md`
-are **not implemented yet** and are not documented here. See
-[Plan references](#plan-references).
+versioning and a gated Swagger UI at `/docs` — plus the public unversioned
+health probe of TODO-02 §4, `HEAD /health/ping` (see
+[API behavior at this stage](#api-behavior-at-this-stage)). The API-key guard
+(§5) is **not implemented yet**; until it lands, every route — health
+included — is public. See [Plan references](#plan-references).
 
 ## Table of Contents
 
@@ -125,19 +125,28 @@ Port `3001` was chosen to avoid conflicts with the provided services
 
 ## API behavior at this stage
 
-With TODO-02 §3 implemented, the HTTP surface behaves as follows **today**:
+With TODO-02 §3 and §4 implemented, the HTTP surface behaves as follows
+**today**:
 
-- **Every route 404s.** No controllers are registered yet, so any path —
-  `/`, `/v1/anything`, `/health/ping` — returns the NestJS default 404. This
-  is expected, not a defect: the unversioned §4 health probe lands in T4,
-  and business routes from later TODOs will be served under `/v1/...` via
-  URI versioning (`defaultVersion: '1'`, deliberately **no** global prefix).
-  The T5 guard (§5) is what will eventually make `API_KEY` observably
-  enforced.
+- **`HEAD /health/ping` answers `200` with an empty body** (TODO-02 §4 —
+  implemented). The route is **unversioned**: the controller declares
+  `version: VERSION_NEUTRAL` (global-plan decision G8-R — the installed
+  NestJS 11.2.3 has no `@SkipVersioncheck()`), so it lives outside `/v1`.
+  It is **public** simply because no guard exists yet; TODO-02 §5 (T5) will
+  register the API-key guard and exempt this route with `@Public()`.
+- **Every other route 404s.** No business controllers are registered yet,
+  so any other path — `/`, `/v1/anything`, even `/v1/health/ping` — returns
+  the NestJS default 404 (a `GET` on `/health/ping` 404s too: the probe
+  answers `HEAD` alone). Business routes from later TODOs will be served
+  under `/v1/...` via URI versioning (`defaultVersion: '1'`, deliberately
+  **no** global prefix). The T5 guard (§5) is what will eventually make
+  `API_KEY` observably enforced; until then **all routes are public**.
 - **`/docs` is the one real page** (when Swagger is enabled, the default).
   Swagger serves itself outside the versioned router, so versioning never
-  prefixes it.
-- **Every response — including those 404s — carries helmet security headers**
+  prefixes it. The UI lists the health probe as a `head` operation on
+  `/health/ping` — deliberately left visible (T4 decision C).
+- **Every response — including the health `200` and every 404 — carries helmet
+  security headers**
   (e.g. `x-content-type-options: nosniff`, `cross-origin-resource-policy`)
   and passes through the global `ValidationPipe` and CORS middleware.
 
@@ -145,12 +154,17 @@ Quick probes (PowerShell: `curl` aliases to `Invoke-WebRequest` — always use
 `curl.exe`):
 
 ```powershell
-curl.exe -i http://localhost:3001/          # 404 + helmet security headers
+curl.exe -I http://localhost:3001/health/ping   # 200, empty body
+curl.exe -i http://localhost:3001/              # 404 + helmet security headers
+curl.exe -s -o NUL -w "%{http_code}" http://localhost:3001/v1/health/ping   # 404 — proves the probe is not under /v1
 curl.exe -s -o NUL -w "%{http_code}" http://localhost:3001/docs/   # 200
 ```
 
-(`-i` prints status + headers; use `-I` for headers only. The `/docs/` URL
-needs the trailing slash — the bare `/docs` answers a 301 redirect.)
+(`-I` makes curl send a HEAD request and print only the response headers —
+required for the health probe, which answers `HEAD` alone. `-i` prints status
++ headers for the generic 404 check; `-s -o NUL -w "%{http_code}"` prints only
+the status code. The `/docs/` URL needs the trailing slash — the bare `/docs`
+answers a 301 redirect.)
 
 Each probe also prints a morgan line on the server console, e.g.:
 
@@ -192,12 +206,19 @@ With the app running, check the behavior described in
 [API behavior at this stage](#api-behavior-at-this-stage):
 
 ```bash
+curl -I http://localhost:3001/health/ping
+```
+
+Expected: **`HTTP/1.1 200 OK`** with **no body** — the unversioned, public
+health probe (TODO-02 §4) is up. Then:
+
+```bash
 curl -i http://localhost:3001/
 ```
 
-Expected: **`HTTP 404`** — the server is up and answering (a real reply, not
-a connection error) with **helmet security headers** on the response, and the
-morgan request line printed on the server console. Then:
+Expected: **`HTTP 404`** — every other unknown route still 404s (a real reply,
+not a connection error) with **helmet security headers** on the response, and
+the morgan request line printed on the server console. Then:
 
 ```bash
 curl -s -o /dev/null -w "%{http_code}\n" http://localhost:3001/docs/
@@ -246,8 +267,14 @@ of scope for TODO-02 and arrive in later work.
   [`.kilo/plans/20260913-project-foundation-t3-bootstrap.md`](../.kilo/plans/20260913-project-foundation-t3-bootstrap.md)
 - T3 simplification plan (S1: `splitOrigins` folded into `resolveCorsOrigins`):
   [`.kilo/plans/20260913-project-foundation-t3-simplify.md`](../.kilo/plans/20260913-project-foundation-t3-simplify.md)
+- T4 health plan (§4 probe; decision G8-R unversioning via `VERSION_NEUTRAL`,
+  Swagger-visibility decision C):
+  [`.kilo/plans/20260913-project-foundation-t4-health.md`](../.kilo/plans/20260913-project-foundation-t4-health.md)
+- T4 simplification plan (health curl how-to moved into `ping()` JSDoc):
+  [`.kilo/plans/20260913-project-foundation-t4-simplify.md`](../.kilo/plans/20260913-project-foundation-t4-simplify.md)
 - T1 source TODO: [`.agent/todos/20260913/20260913-todo-2.md`](../.agent/todos/20260913/20260913-todo-2.md) §1;
-  T2 source TODO: same file §2; T3 source TODO: same file §3
+  T2 source TODO: same file §2; T3 source TODO: same file §3;
+  T4 source TODO: same file §4
 
 ## Related docs
 
