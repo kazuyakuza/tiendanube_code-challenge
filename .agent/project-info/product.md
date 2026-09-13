@@ -25,10 +25,8 @@ receivable atomically-like, applying fee rules and guaranteeing unique IDs.
 
 ## Fee Rules
 
-| Payment Method | Fee  | Receivable Status | Payment Date       |
-|----------------|------|-------------------|--------------------|
-| `debit_card`   | 2%   | `paid`            | Same day (D+0)     |
-| `credit_card`  | 4%   | `waiting_funds`   | Creation + 30 days |
+The canonical fee rules table (fee %, receivable status, payment date per
+payment method) lives in `brief.md` §3.2 — Fee Rules. Do not duplicate it here.
 
 - `discount` holds the **fee percentage** as a string: `"2"` for debit_card, `"4"`
   for credit_card (matches the seed data in `config/db.json`).
