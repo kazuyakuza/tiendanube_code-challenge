@@ -5,13 +5,27 @@
 ## Current Work Focus
 
 TODO-02 "Project Foundation" (`.agent/todos/20260913/20260913-todo-2.md`) in
-progress on branch `feat/project-foundation`. T1 (§1 bootstrap) and T2 (§2
-validated configuration module) are done: the app boots through a global,
-cached `ConfigModule` that validates `.env` fail-fast
-(`src/config/env.validation.ts` + `src/config/config.keys.ts`). T3 (§3
-`main.ts` hardening) is next.
+progress on branch `feat/project-foundation`. T1 (§1 scaffold), T2 (§2
+validated configuration) and T3 (§3 hardened `main.ts` bootstrap: helmet,
+env-driven CORS, morgan, global ValidationPipe, URI versioning, Swagger at
+`/docs` gated by `SWAGGER_ENABLED`, validated `ConfigService` PORT) are done.
+T4 (§4 public unversioned `HEAD /health/ping`) is next.
 
 ## Recent Changes
+
+- 2026-09-13: Hardened application bootstrap (T3 of TODO-02, commits 84bfb15
+  + 7c78932): `src/main.ts` wires helmet defaults, env-driven CORS
+  (`CORS_ORIGINS` CSV allowlist; absent/blank ⇒ allow all), morgan
+  (`NODE_ENV`-conditional format: `dev` in development, `combined`
+  otherwise), a global `ValidationPipe`
+  (whitelist/forbidNonWhitelisted/transform), URI versioning
+  `defaultVersion: '1'` (no `setGlobalPrefix`), Swagger UI at `/docs` gated
+  by `SWAGGER_ENABLED`, and listens on the validated PORT. All env reads go
+  through `ConfigService` + `ConfigKeys` per plan addendum A3-R
+  (`getOrThrow` for required keys; `get(key, default)` for `SWAGGER_ENABLED`);
+  simplify step S1 folded `splitOrigins` into `resolveCorsOrigins`. Docs: new
+  "API behavior at this stage" section in `docs/app-setup.md` (everything
+  404s except `/docs` — no controllers yet).
 
 - 2026-09-13: Validated configuration module (T2 of TODO-02):
   `src/config/env.validation.ts` (class-validator schema — 5 required vars
@@ -22,7 +36,8 @@ cached `ConfigModule` that validates `.env` fail-fast
   global `ConfigModule.forRoot({ isGlobal, cache, validate })` in
   `AppModule`; fail-fast bootstrap error names every offending variable.
   `main.ts` untouched per decision A9 (still reads `process.env.PORT` until
-  T3). Docs: new "Environment configuration" section in `docs/app-setup.md`.
+  T3 — that temporary read is gone, superseded by the T3 entry above). Docs:
+  new "Environment configuration" section in `docs/app-setup.md`.
 
 - 2026-09-13: Scaffolded NestJS 11 foundation (T1 of TODO-02): root
   `package.json`/lockfile, `tsconfig{,.build}.json`, `nest-cli.json`,
@@ -53,14 +68,18 @@ cached `ConfigModule` that validates `.env` fail-fast
 
 ## Immediate Next Steps
 
-1. TODO-02 T3: harden `main.ts` bootstrap — helmet, CORS (`CORS_ORIGINS` via
-   `ConfigKeys`), morgan, global `ValidationPipe`, URI versioning, Swagger
-   (gated by `SWAGGER_ENABLED`), `ConfigService`-driven PORT (replace the
-   temporary `process.env.PORT` + `DEFAULT_PORT` read per decision A9).
-2. TODO-02 T4: public unversioned `HEAD /health/ping` module.
-3. TODO-02 T5: global `ApiKeyGuard` (`x-api-key`, 401, reads
-   `ConfigKeys.ApiKey`) + `@Public()` + Swagger security scheme; then the
-   `brief.md` §6 module folders land.
-4. Later TODOs: transactions/receivables orchestration, Numerator CAS client
+1. TODO-02 T4: public unversioned `HEAD /health/ping` module (note:
+   `@SkipVersioncheck()` from global-plan G8 does not exist in the installed
+   `@nestjs/common` — the unversioning mechanism is `version: VERSION_NEUTRAL`;
+   `src/main.ts` header JSDoc updated accordingly).
+2. TODO-02 T5: global `ApiKeyGuard` (`x-api-key`, 401, reads
+   `ConfigKeys.ApiKey`) + `@Public()` + Swagger security scheme (extend the
+   `DocumentBuilder` chain in `main.ts` `setupSwagger` — reserved extension
+   point); then the `brief.md` §6 module folders land.
+3. Later TODOs: transactions/receivables orchestration, Numerator CAS client
    (`ConfigKeys.NumeratorApiUrl`), json-server client (`ConfigKeys.JsonServerUrl`),
    unit + e2e test suites (see `brief.md` §3).
+4. After TODO-02 closes: user-owned future TODO files
+   `.agent/todos/20260913/20260913-todo-3.md` and
+   `.agent/todos/20260913/20260913-todo-4.md` exist **UNTRACKED** (kept out of
+   this workflow and its commits; the user owns them).

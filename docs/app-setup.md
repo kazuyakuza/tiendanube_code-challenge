@@ -1,11 +1,14 @@
 # Orchestration API — App Setup & Run Guide
 
 Covers **what the codebase does today**: the NestJS 11 application scaffolded in
-TODO-02 §1 (Project Bootstrap) plus the validated environment configuration of
-TODO-02 §2 (Configuration Module). Features from later sections of
-`.agent/todos/20260913/20260913-todo-2.md` (security/logging middleware,
-Swagger, health endpoint, API-key guard) are **not implemented yet** and are not
-documented here. See [Plan references](#plan-references).
+TODO-02 §1 (Project Bootstrap), the validated environment configuration of
+TODO-02 §2 (Configuration Module), and the hardened bootstrap of TODO-02 §3 —
+helmet, env-driven CORS, morgan request logging, a global validation pipe, URI
+versioning and a gated Swagger UI at `/docs` (see
+[API behavior at this stage](#api-behavior-at-this-stage)). The health endpoint
+(§4) and the API-key guard (§5) of `.agent/todos/20260913/20260913-todo-2.md`
+are **not implemented yet** and are not documented here. See
+[Plan references](#plan-references).
 
 ## Table of Contents
 
@@ -15,6 +18,7 @@ documented here. See [Plan references](#plan-references).
 - [Environment file](#environment-file)
 - [Environment configuration](#environment-configuration)
 - [Run modes](#run-modes)
+- [API behavior at this stage](#api-behavior-at-this-stage)
 - [Verify](#verify)
 - [npm scripts](#npm-scripts)
 - [Plan references](#plan-references)
@@ -63,13 +67,14 @@ file and carries only placeholder/example values (see its comments for each
 key: `NODE_ENV`, `PORT`, `NUMERATOR_API_URL`, `JSON_SERVER_URL`, `API_KEY`,
 `SWAGGER_ENABLED`, and the optional `CORS_ORIGINS` note).
 
-**Current-phase truth:** the app now loads and validates `.env` at startup. The
-global `ConfigModule` (TODO-02 §2, implemented) reads `.env` during bootstrap —
-before the listening port is resolved — and every variable below is validated
-then. One temporary nuance remains until §3 (T3): `src/main.ts` still reads the
-port directly from `process.env.PORT` (falling back to `3001`) instead of via
-`ConfigService`; the `.env` value reaches `process.env` through the
-`ConfigModule` load, so the documented behavior already holds.
+**Current-phase truth:** the app loads and validates `.env` at startup and now
+**consumes** it. The global `ConfigModule` (TODO-02 §2, implemented) reads
+`.env` during bootstrap — before the listening port is resolved — and every
+variable below is validated then. As of §3 (T3, implemented) the hardened
+`src/main.ts` reads `PORT`, `NODE_ENV`, `CORS_ORIGINS` and `SWAGGER_ENABLED`
+exclusively through the validated `ConfigService` + `ConfigKeys`; the former
+temporary direct `process.env.PORT` read (with its `3001` fallback) is gone, so
+nothing bypasses validation at listen time.
 
 ## Environment configuration
 
@@ -79,15 +84,15 @@ registered in `src/app.module.ts`. Environment consumers inject `ConfigService`
 and reference keys through `ConfigKeys` (`src/config/config.keys.ts`) — never
 literal key strings (see `brief.md` §4.1 and global-plan decisions G4/G5).
 
-| Variable            | Required | Rules / default                                      | Purpose                                        | Example                  |
-|---------------------|----------|------------------------------------------------------|------------------------------------------------|--------------------------|
-| `NODE_ENV`          | yes      | enum: `development` \| `production` \| `test`        | Environment name                               | `development`            |
-| `PORT`              | yes      | integer > 0 (coerced from the raw env string)        | App listen port                                | `3001`                   |
-| `NUMERATOR_API_URL` | yes      | valid URL **including protocol** (TLD not required)  | Numerator API base URL                         | `http://localhost:3000`  |
-| `JSON_SERVER_URL`   | yes      | valid URL **including protocol** (TLD not required)  | json-server base URL                           | `http://localhost:8080`  |
-| `API_KEY`           | yes      | non-empty string                                     | Key the future `x-api-key` guard will check    | `your-secret-api-key-here` |
-| `SWAGGER_ENABLED`   | no       | `"true"` \| `"false"`, default `true`                | Swagger UI (`/docs`) on/off switch             | `true`                   |
-| `CORS_ORIGINS`      | no       | comma-separated origins; absent ⇒ allow all origins  | CORS allowlist                                 | `http://localhost:5173`  |
+| Variable            | Required | Rules / default                                      | Purpose                                                                    | Example                    |
+|---------------------|----------|------------------------------------------------------|----------------------------------------------------------------------------|----------------------------|
+| `NODE_ENV`          | yes      | enum: `development` \| `production` \| `test`        | Environment name; also selects the morgan log format (`dev` vs `combined`) | `development`              |
+| `PORT`              | yes      | integer > 0 (coerced from the raw env string)        | App listen port — consumed by the `main.ts` bootstrap                      | `3001`                     |
+| `NUMERATOR_API_URL` | yes      | valid URL **including protocol** (TLD not required)  | Numerator API base URL (future client wiring)                              | `http://localhost:3000`    |
+| `JSON_SERVER_URL`   | yes      | valid URL **including protocol** (TLD not required)  | json-server base URL (future client wiring)                                | `http://localhost:8080`    |
+| `API_KEY`           | yes      | non-empty string                                     | Key the future `x-api-key` guard will check (T5 — not yet active)          | `your-secret-api-key-here` |
+| `SWAGGER_ENABLED`   | no       | `"true"` \| `"false"`, default `true`                | Swagger UI (`/docs`) on/off switch — consumed at bootstrap                 | `true`                     |
+| `CORS_ORIGINS`      | no       | comma-separated origins; absent/blank ⇒ allow all    | CORS allowlist — consumed by the `main.ts` bootstrap                       | `http://localhost:5173`    |
 
 **Fail-fast behavior:** with an invalid `.env` the application **refuses to
 start**. Validation throws a single `Invalid environment configuration` error
@@ -99,12 +104,14 @@ silent fallback for required variables; fix `.env` and boot again.
 **Committed vs. local:** only `.env.example` (placeholders) is committed; your
 own `.env` is gitignored. Never put real secrets in `.env.example`.
 
-**Validation vs. consumption:** validation of all seven variables is active
-**now** (TODO-02 §2). Their *consumers* arrive in upcoming steps:
-`PORT`/`CORS_ORIGINS`/`SWAGGER_ENABLED` are used by the hardened `main.ts`
-bootstrap in §3 (T3), `API_KEY` is enforced by the API-key guard in §5 (T5),
-and the two service URLs are consumed by the Numerator/json-server clients in
-later TODOs.
+**Consumed now vs. later:** the `main.ts` bootstrap (TODO-02 §3, implemented)
+already consumes four variables through the validated `ConfigService`:
+`PORT` (listen port, `getOrThrow`), `NODE_ENV` (selects the morgan log
+format), `CORS_ORIGINS` (CORS allowlist; absent ⇒ allow all) and
+`SWAGGER_ENABLED` (mounts `/docs` or not; absent ⇒ enabled). Still validated
+but **not yet consumed**: `API_KEY` (its consumer is the API-key guard of §5,
+T5 — not implemented) and the two service URLs (external-service clients of
+later TODOs).
 
 ## Run modes
 
@@ -116,16 +123,88 @@ later TODOs.
 Port `3001` was chosen to avoid conflicts with the provided services
 (numerator-api on `3000`, json-server on `8080`).
 
+## API behavior at this stage
+
+With TODO-02 §3 implemented, the HTTP surface behaves as follows **today**:
+
+- **Every route 404s.** No controllers are registered yet, so any path —
+  `/`, `/v1/anything`, `/health/ping` — returns the NestJS default 404. This
+  is expected, not a defect: the unversioned §4 health probe lands in T4,
+  and business routes from later TODOs will be served under `/v1/...` via
+  URI versioning (`defaultVersion: '1'`, deliberately **no** global prefix).
+  The T5 guard (§5) is what will eventually make `API_KEY` observably
+  enforced.
+- **`/docs` is the one real page** (when Swagger is enabled, the default).
+  Swagger serves itself outside the versioned router, so versioning never
+  prefixes it.
+- **Every response — including those 404s — carries helmet security headers**
+  (e.g. `x-content-type-options: nosniff`, `cross-origin-resource-policy`)
+  and passes through the global `ValidationPipe` and CORS middleware.
+
+Quick probes (PowerShell: `curl` aliases to `Invoke-WebRequest` — always use
+`curl.exe`):
+
+```powershell
+curl.exe -i http://localhost:3001/          # 404 + helmet security headers
+curl.exe -s -o NUL -w "%{http_code}" http://localhost:3001/docs/   # 200
+```
+
+(`-i` prints status + headers; use `-I` for headers only. The `/docs/` URL
+needs the trailing slash — the bare `/docs` answers a 301 redirect.)
+
+Each probe also prints a morgan line on the server console, e.g.:
+
+```text
+GET / 404 150 - 3.421 ms
+```
+
+Meaning (dev format): method, path, status, response size in bytes, elapsed
+time. In `production`/`test` the `combined` format replaces this with the
+Apache-style line (client IP, timestamp, request, status, size, referrer,
+user-agent).
+
+### Enabling / disabling Swagger (`/docs`)
+
+`SWAGGER_ENABLED` is optional and defaults to `true`; only `false` disables
+the UI. Set it in `.env`:
+
+```env
+SWAGGER_ENABLED=false
+```
+
+or override per-process without touching any file (process env wins over
+`.env` in `ConfigService`):
+
+```powershell
+$env:SWAGGER_ENABLED = 'false'; npm run start:dev
+Remove-Item Env:SWAGGER_ENABLED   # back to the .env/default value
+```
+
+Confirm either state from another terminal:
+
+```powershell
+curl.exe -s -o NUL -w "%{http_code}" http://localhost:3001/docs/   # 200 when enabled, 404 when disabled
+```
+
 ## Verify
 
-With the app running, probe the root path:
+With the app running, check the behavior described in
+[API behavior at this stage](#api-behavior-at-this-stage):
 
 ```bash
 curl -i http://localhost:3001/
 ```
 
-Expected: **`HTTP 404`** — the server is up and answering, but no routes are
-registered yet at this stage (a real reply, not a connection error).
+Expected: **`HTTP 404`** — the server is up and answering (a real reply, not
+a connection error) with **helmet security headers** on the response, and the
+morgan request line printed on the server console. Then:
+
+```bash
+curl -s -o /dev/null -w "%{http_code}\n" http://localhost:3001/docs/
+```
+
+Expected: **`200`** with the default configuration (`SWAGGER_ENABLED` unset
+or `true`); see the Swagger subsection above for the disabled case.
 
 Quality gates (all must exit `0`):
 
@@ -161,13 +240,19 @@ of scope for TODO-02 and arrive in later work.
   [`.kilo/plans/20260913-project-foundation-t1-bootstrap.md`](../.kilo/plans/20260913-project-foundation-t1-bootstrap.md)
 - T2 configuration plan (env schema, decisions A1–A10 + A4-R URL strictness):
   [`.kilo/plans/20260913-project-foundation-t2-config.md`](../.kilo/plans/20260913-project-foundation-t2-config.md)
+- T3 bootstrap plan (§3 hardening, decisions A–N + addendum A3-R ConfigService
+  call-site patterns: `getOrThrow` for required keys, `get(key, default)` for
+  `SWAGGER_ENABLED`):
+  [`.kilo/plans/20260913-project-foundation-t3-bootstrap.md`](../.kilo/plans/20260913-project-foundation-t3-bootstrap.md)
+- T3 simplification plan (S1: `splitOrigins` folded into `resolveCorsOrigins`):
+  [`.kilo/plans/20260913-project-foundation-t3-simplify.md`](../.kilo/plans/20260913-project-foundation-t3-simplify.md)
 - T1 source TODO: [`.agent/todos/20260913/20260913-todo-2.md`](../.agent/todos/20260913/20260913-todo-2.md) §1;
-  T2 source TODO: same file §2
+  T2 source TODO: same file §2; T3 source TODO: same file §3
 
 ## Related docs
 
 - [Challenge statement](../README.md) — original task brief (localized: [es-ar](../README-es-ar.md), [pt-br](../README-pt-br.md)); unchanged by this app work.
 - [How to set up Git](how-to-set-up-git.md) — repository/credential setup.
 - [How to write TODO files](how-to-write-todo-files.md) — format used by `.agent/todos/`.
-- Target architecture of the completed API (planned, not implemented):
-  [`.agent/project-info/architecture.md`](../.agent/project-info/architecture.md).
+- Target architecture of the completed API (status block marks the parts
+  already implemented): [`.agent/project-info/architecture.md`](../.agent/project-info/architecture.md).

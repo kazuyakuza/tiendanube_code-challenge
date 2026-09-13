@@ -11,8 +11,8 @@
  * SWAGGER_ENABLED as a real boolean (absent ⇒ true).
  *
  * Versioning interplay: URI versioning prefixes controllers with `/v1`
- * (`defaultVersion: '1'`); the unversioned health endpoints (TODO-02 §4, T4)
- * must opt out with `@SkipVersioncheck()` in their own cycle.
+ * (`defaultVersion: '1'`); the unversioned health endpoint (TODO-02 §4, T4)
+ * opts out with `VERSION_NEUTRAL` from `@nestjs/common` in its own cycle.
  *
  * Run guide: `docs/app-setup.md`.
  */
@@ -69,8 +69,8 @@ function resolveCorsOrigins(rawOrigins?: string): string[] | boolean {
 /**
  * Chooses the morgan format: concise `dev` in development, full `combined`
  * otherwise (production and test). Express middleware registered before
- * listen, so every incoming HTTP request — including 404s and the
- * unversioned health endpoint — is logged to stdout (global plan risk R2).
+ * listen, so every incoming HTTP request — today's catch-all 404s included,
+ * like every route added in later tasks — is logged to stdout (plan risk R2).
  */
 function resolveHttpLogFormat(nodeEnv?: string): 'dev' | 'combined' {
   if (nodeEnv === NodeEnvironment.Development) {

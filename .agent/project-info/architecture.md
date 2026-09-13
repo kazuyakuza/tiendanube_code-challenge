@@ -22,6 +22,24 @@
 > `validation.ts` shipped under the TODO-mandated name `env.validation.ts`.
 > Later tasks must stay consistent with these names. Everything else below
 > remains planned.
+>
+> 2026-09-13 update (TODO-02 T3): the `main.ts` "Bootstrap" concern is now
+> **implemented** — security/logging/validation/versioning/docs, all
+> env-driven: helmet defaults on every response; CORS via `CORS_ORIGINS`
+> (CSV allowlist, absent/blank ⇒ allow-all dev default); morgan with a
+> `NODE_ENV`-conditional format (`dev` in development, `combined` otherwise,
+> incl. the 404s of this stage); global `ValidationPipe`
+> (whitelist/forbidNonWhitelisted/transform); URI versioning
+> `defaultVersion: '1'` with **no** `setGlobalPrefix` (this supersedes the
+> "`setGlobalPrefix` + `enableVersioning`" phrase in the "API Versioning"
+> section, whose text stands as original planning); Swagger UI at `/docs`,
+> gated by `SWAGGER_ENABLED` (absent ⇒ enabled); listen PORT read through the
+> validated `ConfigService` (A3-R: required keys via `getOrThrow`,
+> `SWAGGER_ENABLED` via `get(key, default)`). No exception filters or
+> interceptors exist yet, no route is served besides `/docs`, and health (§
+> "HEAD /health/ping") plus the API-key guard remain **planned**; their code
+> lives in `common/` + `health/` per the layout below, which T4/T5 will
+> create. Details: `docs/app-setup.md` ("API behavior at this stage").
 
 ## Modular NestJS Layout (target)
 

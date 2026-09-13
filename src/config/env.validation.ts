@@ -12,12 +12,14 @@
  *
  * AI-agent guidance:
  * - Read config via `ConfigService` + `ConfigKeys` (`src/config/config.keys.ts`),
- *   never literal key strings. Exception until T3: `main.ts` still reads
- *   `process.env.PORT` directly (TODO-02 §3 replaces it with ConfigService).
- * - Consumption map: PORT / CORS_ORIGINS / SWAGGER_ENABLED → `main.ts`
- *   bootstrap (T3); API_KEY → ApiKeyGuard (T5); NUMERATOR_API_URL /
- *   JSON_SERVER_URL → external-service clients (later TODOs). All are
- *   *validated* now, even before their consumers land.
+ *   never literal key strings. Since T3 this holds application-wide: the
+ *   bootstrap's former temporary `process.env.PORT` read is gone.
+ * - Consumption map: PORT / NODE_ENV / CORS_ORIGINS / SWAGGER_ENABLED →
+ *   `main.ts` bootstrap (T3, implemented; required keys via `getOrThrow`,
+ *   `SWAGGER_ENABLED` via `get(key, true)` — plan addendum A3-R); API_KEY →
+ *   ApiKeyGuard (T5, not yet implemented); NUMERATOR_API_URL /
+ *   JSON_SERVER_URL → external-service clients (later TODOs). All seven are
+ *   *validated* at bootstrap even where no consumer has landed yet.
  * - URL fields require a protocol (`require_protocol`, plan addendum A4-R):
  *   protocol-less garbage fails at startup instead of at the first HTTP call.
  * - Adding a required field here also requires updating `.env.example` and
