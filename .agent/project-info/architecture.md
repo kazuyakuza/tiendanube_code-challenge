@@ -15,7 +15,7 @@ src/
 │   ├── guards/             # ApiKeyGuard (x-api-key header)
 │   ├── filters/            # Global exception filter (structured errors)
 │   └── interceptors/       # Logging/response conventions
-├── health/                 # GET /health/ping — public liveness probe
+├── health/                 # HEAD /health/ping — public liveness probe
 ├── transactions/           # Main orchestration module
 │   ├── dto/                # CreateTransactionRequest, response DTOs
 │   ├── transactions.controller.ts
