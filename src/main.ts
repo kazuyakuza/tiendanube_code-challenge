@@ -59,21 +59,11 @@ async function bootstrap(): Promise<void> {
  * production is a one-line .env change (see .env.example).
  */
 function resolveCorsOrigins(rawOrigins?: string): string[] | boolean {
-  if (!rawOrigins) {
-    return true;
-  }
-  const origins = splitOrigins(rawOrigins);
-  return origins.length > 0 ? origins : true;
-}
-
-/**
- * Splits a comma-separated CORS_ORIGINS value into trimmed, non-empty origins.
- */
-function splitOrigins(rawOrigins: string): string[] {
-  return rawOrigins
+  const origins = (rawOrigins ?? '')
     .split(',')
     .map((origin) => origin.trim())
     .filter((origin) => origin.length > 0);
+  return origins.length > 0 ? origins : true;
 }
 
 /**
