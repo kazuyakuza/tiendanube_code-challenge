@@ -3,6 +3,7 @@
 # Folders in src/
 
 - src/ - NestJS application root: main.ts bootstrap and root AppModule
+- src/config/ - Validated environment configuration: class-validator env schema (env.validation.ts) and ConfigService key constants (config.keys.ts)
 - test/ - e2e Jest config (jest-e2e.json); e2e specs arrive in later TODOs
 
 # Other folders
