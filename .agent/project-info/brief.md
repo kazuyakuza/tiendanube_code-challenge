@@ -23,7 +23,7 @@ The system must:
 | Security                  | `helmet` + CORS + API Key                   | Standard production hardening              |
 | API Versioning            | URI versioning (`/v1/...`)                  | NestJS built-in                            |
 | Documentation             | Swagger (`@nestjs/swagger`)                 | Auto-generated OpenAPI                     |
-| Testing                   | Jest (unit) + Supertest (e2e)               |                         |
+| Testing                   | Jest (unit) + Supertest (e2e)               |                                            |
 
 ## 3. Functional Requirements
 
@@ -51,8 +51,8 @@ The system must:
 | `debit_card`   | 2%   | `paid`            | Same day (D+0)    |
 | `credit_card`  | 4%   | `waiting_funds`   | Creation + 30 days|
 
-- `discount` = fee amount (not percentage)
-- `total` = `subtotal - discount`
+- `discount` = fee percentage (debit_card → "2", credit_card → "4", stored as string)
+- `total` = `subtotal × (1 − discount/100)` (fee deducted from the transaction total)
 - Card number must be stored and returned **masked** (only last 4 digits).
 
 ### 3.3 ID Generation Strategy
@@ -68,13 +68,7 @@ The system must:
 
 - All configuration via `.env` file.
 - Environment variables must be validated at bootstrap using a dedicated class (`class-validator` + `class-transformer`).
-- Example variables:
-  - `PORT`
-  - `NUMERATOR_API_URL`
-  - `JSON_SERVER_URL`
-  - `API_KEY`
-  - `NODE_ENV`
-  - etc.
+- Variables: `PORT`, `NUMERATOR_API_URL`, `JSON_SERVER_URL`, `API_KEY`, `NODE_ENV` (full table with examples in `tech.md`).
 
 ### 4.2 Security
 
@@ -100,10 +94,10 @@ The system must:
 
 ## 5. External Dependencies (provided)
 
-| Service       | Base URL (default)                  | Responsibility                     |
-|---------------|---------------------------|------------------------------------|
-| json-server   | `http://localhost:8080`   | Transactions & Receivables storage |
-| Numerator API | `http://localhost:3000`   | Unique sequential ID generation    |
+- **json-server** at `http://localhost:8080` — transactions & receivables storage.
+- **Numerator API** at `http://localhost:3000` — unique sequential ID generation.
+
+> Docker images and setup details: see `tech.md` (External Services).
 
 ## 6. Project Structure (proposed)
 
