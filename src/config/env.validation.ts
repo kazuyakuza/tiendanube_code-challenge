@@ -36,10 +36,10 @@ class EnvironmentVariables {
   @Min(1)
   PORT: number;
 
-  @IsUrl({ require_tld: false })
+  @IsUrl({ require_tld: false, require_protocol: true })
   NUMERATOR_API_URL: string;
 
-  @IsUrl({ require_tld: false })
+  @IsUrl({ require_tld: false, require_protocol: true })
   JSON_SERVER_URL: string;
 
   @IsString()
