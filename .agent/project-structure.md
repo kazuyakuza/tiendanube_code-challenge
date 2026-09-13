@@ -4,6 +4,7 @@
 
 - src/ - NestJS application root: main.ts bootstrap and root AppModule
 - src/config/ - Validated environment configuration: class-validator env schema (env.validation.ts) and ConfigService key constants (config.keys.ts)
+- src/health/ - Public unversioned liveness probe: HealthModule + HealthController (HEAD /health/ping, TODO-02 §4)
 - test/ - e2e Jest config (jest-e2e.json); e2e specs arrive in later TODOs
 
 # Other folders
