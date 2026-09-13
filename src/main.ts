@@ -23,6 +23,7 @@ import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
 import helmet from 'helmet';
 import morgan from 'morgan';
 import { AppModule } from './app.module';
+import { API_KEY_HEADER, API_KEY_SECURITY_SCHEME } from './common/api-key.constants';
 import { ConfigKeys } from './config/config.keys';
 import { NodeEnvironment } from './config/env.validation';
 
@@ -80,15 +81,19 @@ function resolveHttpLogFormat(nodeEnv?: string): 'dev' | 'combined' {
 }
 
 /**
- * Builds and mounts the Swagger UI at `/docs` (TODO-02 §3.5). Deliberately a
- * standalone function so T5 (TODO-02 §5.3) can extend the DocumentBuilder
- * chain with the x-api-key security scheme without reshaping this file.
+ * Builds and mounts the Swagger UI at `/docs` (TODO-02 §3.5) and declares the
+ * `x-api-key` security scheme with a document-level security requirement
+ * (TODO-02 §5.3, T5): the scheme powers the "Authorize" button, and the
+ * requirement makes Swagger UI actually send the header on "Try it out"
+ * calls. Cosmetic trade-off: the public health probe also shows the padlock.
  */
 function setupSwagger(app: INestApplication): void {
   const swaggerConfig = new DocumentBuilder()
     .setTitle(SWAGGER_TITLE)
     .setDescription(SWAGGER_DESCRIPTION)
     .setVersion(SWAGGER_VERSION)
+    .addApiKey({ type: 'apiKey', name: API_KEY_HEADER, in: 'header' }, API_KEY_SECURITY_SCHEME)
+    .addSecurityRequirements(API_KEY_SECURITY_SCHEME)
     .build();
   const swaggerDocument = SwaggerModule.createDocument(app, swaggerConfig);
   SwaggerModule.setup(SWAGGER_UI_PATH, app, swaggerDocument);
