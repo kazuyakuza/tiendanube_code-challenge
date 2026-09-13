@@ -18,6 +18,7 @@ services:
       - "3000:3000"
     volumes:
       - ./numerator-api:/app
+      - /app/node_modules          # fixes EPERM error symlink yarn
 
   tcpdump:
     image: alpine
