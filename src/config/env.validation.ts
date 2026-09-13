@@ -21,6 +21,8 @@ import {
   ValidationError,
 } from 'class-validator';
 
+const urlValidationOptions = { require_tld: false, require_protocol: true };
+
 export enum NodeEnvironment {
   Development = 'development',
   Production = 'production',
@@ -36,10 +38,10 @@ class EnvironmentVariables {
   @Min(1)
   PORT: number;
 
-  @IsUrl({ require_tld: false, require_protocol: true })
+  @IsUrl(urlValidationOptions)
   NUMERATOR_API_URL: string;
 
-  @IsUrl({ require_tld: false, require_protocol: true })
+  @IsUrl(urlValidationOptions)
   JSON_SERVER_URL: string;
 
   @IsString()

@@ -17,7 +17,7 @@ import { validateEnv } from './config/env.validation';
     ConfigModule.forRoot({
       isGlobal: true,
       cache: true,
-      validate: (config) => validateEnv(config),
+      validate: validateEnv,
     }),
   ],
 })
