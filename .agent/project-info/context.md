@@ -4,12 +4,18 @@
 
 ## Current Work Focus
 
-**TODO-04 EXECUTION COMPLETE — workflow step 5 pending** (merge
-`feat/external-clients` → `main`, push). All three tasks closed on
-branch `feat/external-clients` (v `0.3.0`), all `[DONE]` in `20260913-todo-4.md`
-(⚠️ file content still refers to the task numbers as their own §headings;
-rename to `-DONE` suffix happens within step 5):
-
+**TODO-04 CLOSED.** Merged `feat/external-clients` → `main` (`--no-ff`
+merge commit `f0a979a`, build gate exit 0) and pushed to `origin`
+(`74988ee..f0a979a main -> main`) during step 5 (part 1) on 2026-09-14;
+feature branch deletion is the remaining part-2 cleanup. The completed task
+file was renamed working-file `20260913-todo-4.md` → `20260913-todo-4-DONE.md`
+(all 3 §Task headings `[DONE]`). **User decision overrode the prior G19
+"keep untracked" policy for this run: "Commit all current changes and
+untracked files"** — so the checkpoint commit `03689fd` (also in the merge)
+committed: the user's pre-existing `package.json` edit (`docker:ms-logs` →
+`docker:logs`), this file's Task-3 close notes, AND the pending backlog
+`20260913-todo-5.md`, `-todo-6.md`, `-todo-7.md` (now tracked). All three
+tasks:
 - **Task 1 — Numerator client** (`NumeratorService.getNextId(): Promise<string>`,
   CAS retry loop, conflict-only retry G5, domain errors, env knobs
   `MAX_RETRIES`+`NUMERATOR_BASE_BACKOFF_MS`): commits `fa9f723`…`d56eab3` +
@@ -239,10 +245,15 @@ were closed earlier (both merged to `main` and pushed).
 - TODO-03 is complete: all tasks `[DONE]`, merged to `main`, pushed to
   `origin`. Feature branch `feat/transaction-dtos` deleted post-merge.
   (TODO-02 likewise closed earlier — merged to `main` at `d5abceb`, pushed.)
+- TODO-04 is complete: all 3 tasks `[DONE]`, file archived as
+  `20260913-todo-4-DONE.md`, merged to `main` (`f0a979a`) and pushed to
+  `origin`; `feat/external-clients` to be deleted post-merge verification.
 - Flagged user-owned accepted deviations: (a) `30001` in
   `health.controller.ts` curl JSDoc — pre-existing user typo, not workflow
-  scope; (b) `docker:*` scripts in `package.json` — pre-existing user
-  edits checkpointed in step 2. Both retained unchanged.
+  scope; (b) `docker:*` scripts in `package.json` — pre-existing user edit;
+  per the explicit user decision ("commit all current changes and untracked
+  files") committed in `03689fd` with content otherwise kept exactly as the
+  user wrote it (`docker:ms-logs` → `docker:logs` rename).
 
 - The Numerator mock (`numerator-api/numerator.js`) starts at value **3**; the
   json-server seed (`config/db.json`) already holds ids "1"–"3" for both
@@ -258,31 +269,22 @@ were closed earlier (both merged to `main` and pushed).
 
 ## Immediate Next Steps
 
-1. **Continue TODO-04** (`20260913-todo-4.md` — external clients; note: NOT
-   the transactions-orchestration file its controllers/fees are explicitly
-   out of scope there; pointer corrected from the stale pre-cycle wording
-   of this list): Tasks 1 & 2 are `[DONE]`; **Task 3 (module registration) is
-   implemented (`7a4a149`) + documented (this 4.4 cycle)** — both modules in
-   `AppModule`, per-module `HttpModule.register({ timeout: HTTP_TIMEOUT_MS })`
-   (T1-D7/G12/T3-D1), no structure-map delta per plan §4.
-   Finish Task 3 with 4.5b adherence + 4.6 `[DONE]`, then workflow step 5.
-2. Step 5: close TODO-04 — rename `20260913-todo-4.md` with the `-DONE`
-   suffix in the working tree ONLY (file is untracked/user-owned per G19),
-   merge `feat/external-clients` → `main`, push to `origin` only.
-3. Later transactions-orchestration module — makes `POST /v1/transactions`
-   reachable (the TODO-03 DTO contract then answers **400** on invalid
-   payloads via the global `ValidationPipe` and renders in Swagger `/docs`),
-   wires both clients (two IDs reserved before any write), fee math,
-   masking on the write path, maps the clients' domain errors to HTTP
-   responses (global plan G18) and becomes the first runtime consumer of
-    `TRANSACTIONS_RETURN_BODY`. Both client services are injectable app-wide
-    since TODO-04 Task 3, so this module only needs to import
-    `NumeratorModule`/`JsonServerModule` when it lands. TODO-05
-    (`20260913-todo-5.md`) exists
-    untracked — user-owned, not yet integrated into any workflow.
+1. **Transactions-orchestration module** (next TODO cycle — `20260913-todo-5.md`,
+   `-todo-6.md` or `-todo-7.md`; user selects which) — makes
+   `POST /v1/transactions` reachable (the TODO-03 DTO contract then answers
+   **400** on invalid payloads via the global `ValidationPipe` and renders in
+   Swagger `/docs`), wires both clients (two IDs reserved before any write),
+   fee math, masking on the write path, maps the clients' domain errors to
+   HTTP responses (global plan G18) and becomes the first runtime consumer of
+   `TRANSACTIONS_RETURN_BODY`. Both client services are injectable app-wide
+   since TODO-04 Task 3, so this module only needs to import
+   `NumeratorModule`/`JsonServerModule` when it lands.
+2. TODO-04 remnants closed: workflow step 5 part 1 done (merge `f0a979a`,
+   push `origin`, checkpoint `03689fd` incl. `package.json` user edit +
+   archived `20260913-todo-4-DONE.md` + backlog `todo-5/6/7.md` now tracked);
+   part 2 = delete `feat/external-clients` post-verification + commit this
+   context closure.
 
-Both `.agent/todos/20260913/20260913-todo-4.md` and
-`.agent/todos/20260913/20260913-todo-5.md` — plus `20260913-todo-6.md` and
-`20260913-todo-7.md` observed untracked in `git status` the same day — are
-**UNTRACKED** user-owned
-future work — kept out of this workflow and its commits.
+The backlog files `.agent/todos/20260913/20260913-todo-{5,6,7}.md` are now
+**TRACKED** user-owned future work (committed at the user's explicit
+instruction `03689fd`; contents not interpreted by this workflow).
