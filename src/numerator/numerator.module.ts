@@ -1,20 +1,23 @@
 /**
  * Feature module for the Numerator client (TODO-04 §1.5, decision T1-D1).
  *
- * Imports the BARE `HttpModule` (valid in @nestjs/axios v4: the class itself
- * provides + exports `HttpService` with the default axios instance — no
- * timeout yet). Exports `NumeratorService` so later modules can inject it.
+ * Imports `HttpModule.register({ timeout: HTTP_TIMEOUT_MS })` (TODO-04
+ * §"Configuration & resilience", G12): `@nestjs/axios` v4 has NO `forRoot`,
+ * and `register` (dist/http.module.js) gives THIS module its own isolated
+ * axios instance pre-configured with the 4 s timeout — NumeratorModule's
+ * `HttpService` is independent of any other client's instance.
  *
- * AI-agent guidance: the module-registration task (TODO-04 Task 3) upgrades
- * this import to the timeout-configured form (`HttpModule.register` — note
- * `forRoot` does NOT exist in v4) and registers this module in `AppModule`.
+ * Exports `NumeratorService`, and this module is imported in `AppModule`
+ * (G14), so the Transactions module (next TODOs) can simply add
+ * `NumeratorModule` to its `imports` and inject `NumeratorService`.
  */
 import { HttpModule } from '@nestjs/axios';
 import { Module } from '@nestjs/common';
+import { HTTP_TIMEOUT_MS } from '../common/constants/http-timeout.constants';
 import { NumeratorService } from './numerator.service';
 
 @Module({
-  imports: [HttpModule],
+  imports: [HttpModule.register({ timeout: HTTP_TIMEOUT_MS })],
   providers: [NumeratorService],
   exports: [NumeratorService],
 })
