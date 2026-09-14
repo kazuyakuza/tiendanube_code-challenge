@@ -101,11 +101,7 @@ export class AllExceptionsFilter implements ExceptionFilter {
   }
 
   private resolveDomainBody(exception: unknown): ErrorResponseBody | undefined {
-    if (
-      exception instanceof NumeratorUnavailableError ||
-      exception instanceof NumeratorRetriesExhaustedError ||
-      exception instanceof InvalidNumeratorValueError
-    ) {
+    if (this.isNumeratorError(exception)) {
       return this.buildBody(HttpStatus.SERVICE_UNAVAILABLE, exception.message);
     }
     if (exception instanceof JsonServerRequestError) {
@@ -114,11 +110,25 @@ export class AllExceptionsFilter implements ExceptionFilter {
     return undefined;
   }
 
+  private isNumeratorError(
+    exception: unknown,
+  ): exception is NumeratorUnavailableError | NumeratorRetriesExhaustedError | InvalidNumeratorValueError {
+    return (
+      exception instanceof NumeratorUnavailableError ||
+      exception instanceof NumeratorRetriesExhaustedError ||
+      exception instanceof InvalidNumeratorValueError
+    );
+  }
+
   private mapJsonServerStatus(status: number | undefined): number {
-    if (status === undefined || status >= HttpStatus.INTERNAL_SERVER_ERROR) {
+    if (this.isUpstreamFailure(status)) {
       return HttpStatus.SERVICE_UNAVAILABLE;
     }
     return HttpStatus.BAD_GATEWAY;
+  }
+
+  private isUpstreamFailure(status: number | undefined): boolean {
+    return status === undefined || status >= HttpStatus.INTERNAL_SERVER_ERROR;
   }
 
   private buildBody(statusCode: number, message: string): ErrorResponseBody {
