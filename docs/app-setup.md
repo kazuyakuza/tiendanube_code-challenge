@@ -657,7 +657,7 @@ from `PAYMENT_FEE_PERCENTAGES`):
   Worked examples:
   - `"250.00"` @ credit 4% → `25000 × 96 / 100 = 24000` → `"240.00"`
   - `"340.50"` @ debit 2% → `34050 × 98 / 100 = 33369` → `"333.69"`
-  - `"10.01"` @ credit 4% → `1001 × 96 / 100 = 9609.6` → floor → `9609` →
+  - `"10.01"` @ credit 4% → `1001 × 96 / 100 = 960.96` → floor → `960` →
     `"9.60"`
   - `"0.01"` @ debit 2% → `1 × 98 / 100 = 0.98` → floor `0` → `"0.00"` (valid
     edge; the DTO validator still only requires a positive subtotal)
