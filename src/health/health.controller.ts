@@ -18,10 +18,10 @@ export class HealthController {
    * Answers `HEAD /health/ping` with `200 OK`, no API key required (`@Public()`).
    *
    * Call it with curl (`-I` sends a HEAD request and prints the headers):
-   *   curl -I http://localhost:3001/health/ping
+   *   curl -I http://localhost:30001/health/ping
    */
   @Public()
   @Head('ping')
   @HttpCode(HttpStatus.OK)
-  ping(): void {}
+  ping(): void { }
 }
