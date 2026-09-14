@@ -1,7 +1,7 @@
 # Architecture — Orchestration API (PLANNED)
 
 > STATUS: **core layers implemented — see the dated updates below**
-> (through the 2026-09-14 Task 2 entry). This document originally described
+> (through the 2026-09-14 Task 3 entry). This document originally described
 > the target design that follows `brief.md` §6; its "src/ is empty" framing
 > is superseded — `config/`, `common/` (guards/decorators/enums/constants/
 > utils), `health/`, `transactions/dto/` (contract-only), `numerator/` and
@@ -111,10 +111,13 @@
 > `HttpModule` import is bare — Task 3 registers both modules and upgrades
 > to the timeout-configured `HttpModule.register` form (there is NO
 > `forRoot` in `@nestjs/axios` v4 — decision T1-D7); until then the running
-> app performs **zero outbound HTTP calls**. *(For Task 2 — the
-> `json-server/` block — implemented by the 2026-09-14 update below,
-> superseding only this sentence; the registration/timeout pending state
-> stands.)* The "Concurrency Strategy"
+> app performs **zero outbound HTTP calls**. *(2026-09-14 supersessions: the
+> Task 2 update below implements the `json-server/` block, and the Task 3
+> update below registers both modules with the timeout-configured
+> `HttpModule.register` import — this entry's "Still pending (Tasks 2–3)",
+> bare-`HttpModule` and not-yet-imported statements are stale. The app still
+> performs zero outbound HTTP calls today, but because NO orchestration/
+> endpoint calls the clients, which now DO boot.)* The "Concurrency Strategy"
 > section below was reconciled to the implemented numbers per decision
 > T1-D6 (TODO governs: 10 attempts / 20 ms base / domain error classes —
 > the original 5 / 50 ms / direct-503 draft is superseded; HTTP mapping is
@@ -142,11 +145,34 @@
 > two resource-path constants, and a minimal `JsonServerModule` importing
 > the **bare `HttpModule`** await registration: **still pending (Task 3)**
 > — `HttpModule.register({ timeout })` + `AppModule` import both clients
-> (G12/G14, T1-D7), and neither service instance boots until then. Steps
+> (G12/G14, T1-D7), and neither service instance boots until then. *(State
+> superseded by the 2026-09-14 Task 3 update below: both modules now import
+> `HttpModule.register({ timeout: HTTP_TIMEOUT_MS })` and are registered in
+> `AppModule`; services construct at boot, while outbound HTTP stays at zero
+> for lack of any calling endpoint.)* Steps
 > 3–7 of "Request Data Flow" below remain target design (orchestration,
 > controllers, fees, masking, tests are later TODOs). Details:
 > `docs/json-server-client.md` + `docs/app-setup.md` ("External clients
 > (TODO-04)").
+>
+> 2026-09-14 update (TODO-04 Task 3 — module registration): **both client
+> modules are now registered in `AppModule`** (`NumeratorModule` +
+> `JsonServerModule`, G14), each importing
+> `HttpModule.register({ timeout: HTTP_TIMEOUT_MS })` — the shared constant
+> `HTTP_TIMEOUT_MS = 4000` lives in
+> `src/common/constants/http-timeout.constants.ts` (G12; v4 has no `forRoot`
+> — decisions T1-D7/T3-D1, so the config lives in the feature modules, not a
+> root registration). `register` gives **each module its own isolated,
+> pre-configured axios instance** (T3-D2): the two clients never share one
+> global instance. Both services export and now construct at boot (config
+> reads only) and are injectable app-wide — the TODO's closing guidance ("a
+> developer can inject `NumeratorService` / `JsonServerService` into any
+> other service") is satisfied; the future Transactions module just adds the
+> module to its own `imports`. Still **NOT** implemented: controller /
+> orchestration endpoint, fee calculation, masking call-site and tests — the
+> running app therefore still performs zero outbound HTTP calls. Details:
+> `docs/app-setup.md` ("External clients (TODO-04)" → "Wiring status") +
+> commit `7a4a149`.
 
 ## Modular NestJS Layout (target)
 
@@ -157,7 +183,7 @@ src/
 │   └── env.validation.ts   # class-validator schema + fail-fast validateEnv()
 ├── common/                 # Cross-cutting concerns (guards/decorators implemented, T5; enums/constants/utils implemented, TODO-03)
 │   ├── api-key.constants.ts # API_KEY_HEADER + Swagger scheme name (implemented, T5)
-│   ├── constants/          # payment-fee.constants.ts — fee percent strings "2"/"4" (implemented, TODO-03)
+│   ├── constants/          # payment-fee.constants.ts — fee percent strings "2"/"4" (implemented, TODO-03) + http-timeout.constants.ts — shared `HTTP_TIMEOUT_MS = 4000` for both client modules (implemented, TODO-04 Task 3)
 │   ├── decorators/         # public.decorator.ts — @Public() + IS_PUBLIC_KEY (implemented, T5)
 │   ├── enums/              # payment-method.enum.ts + receivable-status.enum.ts — string wire values (implemented, TODO-03)
 │   ├── guards/             # api-key.guard.ts — global ApiKeyGuard, exact x-api-key match, 401 on missing/wrong (implemented, T5; registered via APP_GUARD from @nestjs/core)
@@ -170,8 +196,8 @@ src/
 │   ├── transactions.controller.ts # planned (TODO-04)
 │   ├── transactions.service.ts    # planned (TODO-04; first caller of maskCardNumber + fee constants)
 │   └── fee-rules.ts        # debit/credit fee map + date/status policy — planned; percentages in common/constants/ meanwhile
-├── numerator/              # Numerator API client + CAS retry logic — IMPLEMENTED, TODO-04 Task 1 (getNextId; constants/errors/interfaces + minimal module — NOT yet imported by app.module.ts, Task 3)
-├── json-server/            # json-server persistence client — IMPLEMENTED, TODO-04 Task 2 (createTransaction/createReceivable transport-only POSTs; constants/errors/interfaces + minimal module — NOT yet imported by app.module.ts, Task 3)
+├── numerator/              # Numerator API client + CAS retry logic — IMPLEMENTED, TODO-04 Task 1 (getNextId; constants/errors/interfaces) — module uses per-module HttpModule.register({ timeout }) and IS registered in app.module.ts (Task 3)
+├── json-server/            # json-server persistence client — IMPLEMENTED, TODO-04 Task 2 (createTransaction/createReceivable transport-only POSTs; constants/errors/interfaces) — module uses per-module HttpModule.register({ timeout }) and IS registered in app.module.ts (Task 3)
 ├── main.ts                 # Bootstrap: helmet, CORS, morgan, versioning, Swagger (API-Key scheme since T5)
 └── app.module.ts           # Wires all modules + global APP_GUARD (ApiKeyGuard, T5)
 ```

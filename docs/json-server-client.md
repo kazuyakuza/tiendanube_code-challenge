@@ -2,13 +2,20 @@
 
 The outbound persistence client of the external-clients TODO: it POSTs
 caller-built payloads to the provided json-server mock and returns the
-echoed resource. **Status (2026-09-14): implemented** on branch
-`feat/external-clients` (commits `c827d8b`, `de84780`, `7af33e9`).
-**Not wired:** `JsonServerModule` joins `AppModule` and the bare
-`HttpModule` import gains the shared timeout only in **Task 3**, so today no
-`JsonServerService` instance is constructed and the app performs zero
-outbound calls. Unit/e2e tests for this client are deferred to a later TODO.
-Parent runbook: [`app-setup.md`](app-setup.md) ("External clients (TODO-04)").
+echoed resource. **Status (2026-09-14): implemented and wired.** Task 2
+built the client on branch `feat/external-clients` (commits `c827d8b`,
+`de84780`, `7af33e9`); **Task 3 registered it** (commit `7a4a149`) —
+`JsonServerModule` is now imported by `AppModule`, and its `HttpModule`
+import carries the shared timeout via
+`HttpModule.register({ timeout: HTTP_TIMEOUT_MS })` (`HTTP_TIMEOUT_MS = 4000`,
+`src/common/constants/http-timeout.constants.ts`) on a per-module isolated
+axios instance (T3-D2; v4 has no `forRoot` — T1-D7/T3-D1). So today a
+`JsonServerService` instance **is constructed at boot** and is injectable
+app-wide (DI verified by the plan's `DI-SANITY-OK` check recorded in the
+Task 3 adherence evidence). It still performs **zero outbound calls at
+runtime** only because no orchestration endpoint invokes it yet. Unit/e2e
+tests for this client are deferred to a later TODO. Parent runbook:
+[`app-setup.md`](app-setup.md) ("External clients (TODO-04)").
 
 ## Table of Contents
 
@@ -20,7 +27,7 @@ Parent runbook: [`app-setup.md`](app-setup.md) ("External clients (TODO-04)").
 - [Failure model](#failure-model)
 - [Privacy rule — payloads are never logged](#privacy-rule--payloads-are-never-logged)
 - [Configuration](#configuration)
-- [Wiring status — Task 3 pointer (not done)](#wiring-status--task-3-pointer-not-done)
+- [Wiring status — registered with timeout](#wiring-status--registered-with-timeout)
 - [Contract exercise — curl against the mock](#contract-exercise--curl-against-the-mock)
 - [References](#references)
 
@@ -58,7 +65,9 @@ card numbers; it only transports the data it receives." Concretely:
   policy for json-server calls is explicitly out of scope for TODO-04).
 - **No HTTP-response mapping** — translating failures into route responses
   is the orchestration layer's job (global-plan decision G18).
-- **No route/module registration** — controllers arrive in later TODOs.
+- **No route** — the service only transports; controllers arrive in later
+  TODOs (the module itself has been registered in `AppModule` by TODO-04
+  Task 3 — see [Wiring status](#wiring-status--registered-with-timeout)).
 
 ## Endpoints
 
@@ -152,14 +161,19 @@ on top must keep this invariant.
   ⇒ `http://host:8080`), so resource URLs can never double-slash (plan
   decision T2-D1).
 
-## Wiring status — Task 3 pointer (not done)
+## Wiring status — registered with timeout
 
-`JsonServerModule` currently imports the **bare** `HttpModule` (valid in
-`@nestjs/axios` v4: default axios instance, **no timeout yet**) and is not
-imported by `AppModule`. **TODO-04 Task 3 will**: upgrade both client modules
-to `HttpModule.register({ timeout })` (≈3–5 s; v4 has no `forRoot` —
-decision T1-D7) and register them app-wide. Until Task 3 lands, nothing
-constructs `JsonServerService` and the app makes zero outbound calls.
+`JsonServerModule` is **registered in `AppModule`** (TODO-04 Task 3, commit
+`7a4a149`, G14) and imports `HttpModule.register({ timeout: HTTP_TIMEOUT_MS })`
+— `@nestjs/axios` v4 has no `forRoot` (T1-D7), and `register` gives this
+module its own isolated axios instance carrying the 4 s timeout
+(`HTTP_TIMEOUT_MS = 4000` from `src/common/constants/http-timeout.constants.ts`),
+separate from the Numerator client's instance (T3-D2). `JsonServerService`
+boots with the app and is injectable anywhere (evidence: the Task 3 plan's
+temp DI-sanity script, `DI-SANITY-OK`, recorded in the adherence-report
+step — not a file in the repo). The future Transactions module simply adds
+`JsonServerModule` to its `imports`. With no orchestration endpoint yet,
+nothing calls the service, so the app still sends zero outbound requests.
 
 ## Contract exercise — curl against the mock
 

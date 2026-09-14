@@ -9,22 +9,56 @@ branch `feat/external-clients` (v `0.3.0`). **Tasks 1 & 2 — Numerator and
 json-server clients — implemented and documented** (Task 1: 4.2 commits
 fa9f723 / c18eda4 / b36b53c / d56eab3, §Task 1 marked `[DONE]`; Task 2:
 4.2 commits c827d8b / de84780 / 7af33e9; 4.3 review: no fixes; 4.3
-simplification: none; 4.4 docs: this cycle). `src/json-server/` ships
+simplification: none; 4.4 docs landed; §Task 2 since marked `[DONE]`).
+`src/json-server/` ships
 `JsonServerService.createTransaction/createReceivable` — **transport-only**
 `@nestjs/axios` POSTs to the two collections (no id generation, fees,
 masking, field defaulting or retries — fail-fast per TODO §Out of scope) —
 with the single `JsonServerRequestError` (`resource` +
 `status: number | undefined`, `undefined` on network/timeout/non-axios +
-payload-free message; card data never logged or serialized). The app still
-performs **no outbound HTTP at runtime**: neither `NumeratorModule` nor
-`JsonServerModule` is imported in `AppModule` and the `HttpModule` timeout
-config awaits **Task 3** (which must use `HttpModule.register` —
-`@nestjs/axios` v4 has no `forRoot`; decision T1-D7); until then no client
-instance boots. Remaining: Task 2's 4.5b adherence + 4.6 `[DONE]`, then
-**Task 3** with its 4.x cycle and workflow step 5. TODO-03 and TODO-02
+payload-free message; card data never logged or serialized). **Tasks 1 & 2
+are `[DONE]` in the TODO file; Task 3 — module registration — is now
+implemented and documented** (single 4.2 commit `7a4a149`; review 4.3 = no
+fix plan, simplification = none). Both `NumeratorModule` and
+`JsonServerModule` are imported in `AppModule` (G14), each using per-module
+`HttpModule.register({ timeout: HTTP_TIMEOUT_MS })` — `HTTP_TIMEOUT_MS =
+4000` in `src/common/constants/http-timeout.constants.ts` (v4 has no
+`forRoot`; decisions T1-D7/T3-D1/T3-D2, isolated configured instances). Both
+services construct at boot (config reads only) and are injectable app-wide
+— the TODO's closing guidance is satisfied. The app still performs **no
+outbound HTTP at runtime** because no controller/orchestration endpoint
+calls the clients yet. Remaining for this TODO: Task 3's 4.5b adherence +
+4.6 `[DONE]` mark, then workflow step 5. TODO-03 and TODO-02
 were closed earlier (both merged to `main` and pushed).
 
 ## Recent Changes
+
+- 2026-09-14: TODO-04 cycle Task 3 — module registration (branch
+  `feat/external-clients`; single 4.2 commit `7a4a149`). New
+  `src/common/constants/http-timeout.constants.ts` (`HTTP_TIMEOUT_MS = 4000`,
+  G12); `numerator.module.ts` + `json-server.module.ts` upgraded from the
+  bare `HttpModule` to per-module `HttpModule.register({ timeout:
+  HTTP_TIMEOUT_MS })` (T3-D1: v4 has no `forRoot`; T3-D2: each module gets
+  its own isolated configured axios instance; JSDoc refreshed in the same
+  files) and both added to `AppModule.imports` next to `HealthModule` (G14),
+  with an app.module header note that NO business route exists — clients
+  boot with config reads only, zero outbound HTTP until orchestration.
+  Services of Tasks 1–2 frozen (zero diff). Verification per plan §3.5:
+  temp `tmp-di-sanity.js` boot + resolve of both services printed
+  `DI-SANITY-OK` (T3-D3: temp script instead of absent `@nestjs/testing`;
+  deleted after run, never committed). 4.3: review = NO FIX PLAN,
+  simplification = NONE. No structure-map delta (folder-level map already
+  covered; plan §4 Commit-2 decision). 4.4 docs: this cycle —
+  `docs/app-setup.md` wiring flips (intro, External-services status, env
+  table rows, consumed-now/boot state, External-clients section incl. both
+  module rows + shared timeout constant row, "Wiring status & pending work"
+  replacing the Task-3-pending list, plan references incl. Task 3 plan),
+  `docs/json-server-client.md` banner + wiring section rewritten to
+  wired-with-timeout, `architecture.md` Task 3 dated entry + tree lines +
+  supersession notes on the Task 1/2 entries, orchestration-controller
+  attributions detached from the now-closed TODO-04. 4.5b/4.6 for Task 3
+  remain open when this bullet was written. Out-of-scope items stay unbuilt
+  (orchestration, fees, masking, controllers, tests — TODO §Out of scope).
 
 - 2026-09-14: TODO-04 cycle Task 2 — json-server client (branch
   `feat/external-clients`; 4.2 commits c827d8b §2.4 transport payload
@@ -219,13 +253,11 @@ were closed earlier (both merged to `main` and pushed).
 1. **Continue TODO-04** (`20260913-todo-4.md` — external clients; note: NOT
    the transactions-orchestration file its controllers/fees are explicitly
    out of scope there; pointer corrected from the stale pre-cycle wording
-   of this list): Task 1 is `[DONE]`; Task 2 (json-server client) is
-   implemented + documented — finish it with 4.5b adherence + 4.6
-   `[DONE]`, then run the full 4.x cycle for **Task 3 — module
-   registration** (both modules — `NumeratorModule` + `JsonServerModule` —
-   into `AppModule`;
-   `HttpModule.register({ timeout: HTTP_TIMEOUT_MS })` per T1-D7/G12;
-   structure map per G15).
+   of this list): Tasks 1 & 2 are `[DONE]`; **Task 3 (module registration) is
+   implemented (`7a4a149`) + documented (this 4.4 cycle)** — both modules in
+   `AppModule`, per-module `HttpModule.register({ timeout: HTTP_TIMEOUT_MS })`
+   (T1-D7/G12/T3-D1), no structure-map delta per plan §4.
+   Finish Task 3 with 4.5b adherence + 4.6 `[DONE]`, then workflow step 5.
 2. Step 5: close TODO-04 — rename `20260913-todo-4.md` with the `-DONE`
    suffix in the working tree ONLY (file is untracked/user-owned per G19),
    merge `feat/external-clients` → `main`, push to `origin` only.
@@ -235,9 +267,14 @@ were closed earlier (both merged to `main` and pushed).
    wires both clients (two IDs reserved before any write), fee math,
    masking on the write path, maps the clients' domain errors to HTTP
    responses (global plan G18) and becomes the first runtime consumer of
-   `TRANSACTIONS_RETURN_BODY`. TODO-05 (`20260913-todo-5.md`) exists
-   untracked — user-owned, not yet integrated into any workflow.
+    `TRANSACTIONS_RETURN_BODY`. Both client services are injectable app-wide
+    since TODO-04 Task 3, so this module only needs to import
+    `NumeratorModule`/`JsonServerModule` when it lands. TODO-05
+    (`20260913-todo-5.md`) exists
+    untracked — user-owned, not yet integrated into any workflow.
 
 Both `.agent/todos/20260913/20260913-todo-4.md` and
-`.agent/todos/20260913/20260913-todo-5.md` are **UNTRACKED** user-owned
+`.agent/todos/20260913/20260913-todo-5.md` — plus `20260913-todo-6.md` and
+`20260913-todo-7.md` observed untracked in `git status` the same day — are
+**UNTRACKED** user-owned
 future work — kept out of this workflow and its commits.
