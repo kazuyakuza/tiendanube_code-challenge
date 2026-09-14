@@ -20,7 +20,9 @@
  *   global ApiKeyGuard (T5, implemented — `src/common/guards/api-key.guard.ts`,
  *   read via `getOrThrow`); NUMERATOR_API_URL /
  *   JSON_SERVER_URL → external-service clients (later TODOs — the only keys
- *   still without a consumer). All seven are *validated* at bootstrap.
+ *   still without a consumer). TRANSACTIONS_RETURN_BODY → transactions
+ *   controller (TODO-04; plumbing only as of TODO-03 §2.4). All eight are
+ *   *validated* at bootstrap.
  * - URL fields require a protocol (`require_protocol`, plan addendum A4-R):
  *   protocol-less garbage fails at startup instead of at the first HTTP call.
  * - Adding a required field here also requires updating `.env.example` and
@@ -82,6 +84,12 @@ class EnvironmentVariables {
   @IsOptional()
   @IsString()
   CORS_ORIGINS: string;
+
+  /** Optional; absent keeps the default `true` (TODO-03 §2.4: POST /v1/transactions returns the full { transaction, receivable } body; `false` ⇒ bare 201 CREATED). */
+  @IsOptional()
+  @Transform(({ value }) => transformBoolString(value))
+  @IsBoolean()
+  TRANSACTIONS_RETURN_BODY: boolean = true;
 }
 
 export function validateEnv(config: Record<string, unknown>): EnvironmentVariables {
