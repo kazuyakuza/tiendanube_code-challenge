@@ -102,4 +102,10 @@ Step 6: Resume + next-TODO handoff text => planner
 
 ## Approvals log
 
-- 2026-09-14: global plan presented to user (pending response)
+- 2026-09-14: global plan presented to user → APPROVED: "Approve Global and Tasks Plans" (4.1b plan auto-approved) + payment-date **Option B** ruling (create_date=now; status carries D+0/D+30; NO payment_date anywhere)
+
+## Post-execution notes (appended 2026-09-14 by Planner at cycle close)
+
+- Merged single 4.1–4.6 cycle executed as approved: impl plan `20260914-transaction-orchestration-impl.md` (archived) → 4.2 commits `207f79c` (fee-rules) + `759bb62` (service/module/wiring); 4.3 review = **NO FIX PLAN**, simplification = 1 step applied (`7b2176c`); 4.4 docs `f3f6b81` (comment-only truth sweep incl. 12 frozen-file JSDoc; + `edae423` worked-example correction from 4.5b nit D-A1); 4.5b verdict **ADHERENT WITH ACCEPTED DEVIATIONS** (report archived); 4.6 `[DONE]` on all five §Task headings.
+- Step 5: TODO archived `20260913-todo-5-DONE.md` (`586ecbf`); merged to `main` `--no-ff` (`5cf97ef`, build+lint green post-merge); context closure `8e9334a`; pushed `177ebf2..8e9334a` to `origin` ONLY; `feat/transaction-orchestration` deleted (stale branch tip `586ecbf` verified merged).
+- Deviations D1–D6 all realized exactly as pre-adjudicated; client modules/DTOs/config zero non-comment changes (T5-G13 honored). `TransactionsService` now exported for the next-TODO controller; app still performs zero outbound HTTP (no route).
