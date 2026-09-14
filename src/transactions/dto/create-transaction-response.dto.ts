@@ -8,12 +8,14 @@
  * when the flag is `false` the endpoint answers a bare `201 CREATED` and
  * this body is not produced. Wired since TODO-05 at the SERVICE layer:
  * `TransactionsService.create` returns this envelope (built from the
- * echoed persisted bodies) or `undefined` when the gate is off; the
- * route-level bare `201` still awaits the controller TODO.
+ * echoed persisted bodies) or `undefined` when the gate is off; since
+ * TODO-06 Cycle A `TransactionsController` relays that result directly,
+ * so the route-level bare `201` (nil body + `@HttpCode(201)`) is live.
  *
- * AI-agent guidance: the still-pending controller TODO annotates its `201`
- * schema with this class; until then Swagger `/docs` shows only the health
- * probe. Invariants: exactly two resources — masked-`cardNumber`
+ * AI-agent guidance: `TransactionsController` annotates its `201`
+ * response with this class (`@ApiCreatedResponse`), so Swagger `/docs`
+ * renders the operation on `POST /v1/transactions`.
+ * Invariants: exactly two resources — masked-`cardNumber`
  * transaction + snake_case receivable, all amounts as strings (see the
  * nested classes' headers).
  */

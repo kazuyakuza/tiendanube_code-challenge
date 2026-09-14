@@ -21,9 +21,9 @@
  * URL via `getOrThrow`). TransactionsReturnBody → `TransactionsService`
  * (TODO-05, implemented — `src/transactions/transactions.service.ts`;
  * service-level gate via `get(key, true)`: `create()` returns the
- * `{ transaction, receivable }` envelope or `undefined`; the bare `201`
- * for the `false` case is still the future controller's behavior — none
- * is wired yet).
+ * `{ transaction, receivable }` envelope or `undefined`; since TODO-06
+ * Cycle A `TransactionsController` relays `undefined` as the bare `201`,
+ * so the gate is HTTP-observable on `POST /v1/transactions`).
  */
 export const ConfigKeys = {
   NodeEnv: 'NODE_ENV',

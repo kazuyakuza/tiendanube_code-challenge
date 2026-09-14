@@ -27,8 +27,9 @@
  *   TRANSACTIONS_RETURN_BODY → `TransactionsService` (TODO-05,
  *   implemented — `src/transactions/transactions.service.ts`; read per
  *   `create()` via `get(key, true)`; gate: envelope returned or
- *   `undefined` — the controller still has to turn `undefined` into a
- *   bare `201`, so only the service-level behavior exists today).
+ *   `undefined` — since TODO-06 Cycle A `TransactionsController` relays
+ *   `undefined` as a bare `201`, making the gate HTTP-observable on
+ *   `POST /v1/transactions`).
  *   All ten are *validated* at bootstrap.
  * - URL fields require a protocol (`require_protocol`, plan addendum A4-R):
  *   protocol-less garbage fails at startup instead of at the first HTTP call.
@@ -92,7 +93,7 @@ class EnvironmentVariables {
   @IsString()
   CORS_ORIGINS: string;
 
-  /** Optional; absent keeps the default `true`. Gate lives at the SERVICE layer since TODO-05 (`TransactionsService.create` returns the { transaction, receivable } envelope, or `undefined` when `false`); the endpoint's bare-`201 CREATED` shape (TODO-03 §2.4) awaits the controller TODO. */
+  /** Optional; absent keeps the default `true`. Gate lives at the SERVICE layer since TODO-05 (`TransactionsService.create` returns the { transaction, receivable } envelope, or `undefined` when `false`); since TODO-06 Cycle A `TransactionsController` relays the result directly, so the endpoint's bare-`201 CREATED` shape (TODO-03 §2.4) is live on `POST /v1/transactions`. */
   @IsOptional()
   @Transform(({ value }) => transformBoolString(value))
   @IsBoolean()

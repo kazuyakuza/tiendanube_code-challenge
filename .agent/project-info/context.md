@@ -4,23 +4,62 @@
 
 ## Current Work Focus
 
-**TODO-05 CLOSED — orchestration landed, merged + pushed.** `TransactionsModule` +
-`TransactionsService` + `fee-rules.ts` registered in `AppModule`; the strict
-`create(dto)` 9-step flow (two Numerator ids reserved before any write,
-masking on the write path, fee/status/date rules,
-`TRANSACTIONS_RETURN_BODY` gate — envelope or `undefined`) is implemented
-and committed. User decision records from this run: merged single 4.1–4.6
-cycle for the five §Task headings (Option B payment-date ruling: no
-`payment_date` field; timing via receivable `status`; approved 2026-09-14)
-and "Approve Global and Tasks Plans". Build+lint gates green post-merge.
-The app still performs zero outbound HTTP — no controller/route invokes the
-service. Next work is the HTTP controller TODO.
+**TODO-06 IN PROGRESS (branch `feat/transactions-endpoint`) — Cycle A
+LANDED, Cycle B PENDING.** `POST /v1/transactions` is LIVE: commit `d12676f`
+added the thin `TransactionsController` (registered in
+`TransactionsModule`) — auth through the existing global `ApiKeyGuard`
+(401 on missing/wrong `x-api-key`), global ValidationPipe 400, 201
+`{ transaction, receivable }` envelope or **bare 201** per the
+service-level `TRANSACTIONS_RETURN_BODY` gate, full Swagger operation at
+`/docs`. The route now invokes `TransactionsService.create()` end-to-end,
+so outbound HTTP to the mock services happens while it is called (boot is
+still config-reads-only). **Cycle B (§Task 2 of the same TODO file —
+global exception filter G4 + partial-failure compensation G5) is IN
+PROGRESS on this same branch:** until it lands, domain errors surface as
+the NestJS default 500 and a failed second write still leaves an orphan
+transaction. TODO-06 is NOT complete (§Task 1/3 `[DONE]` marks come with
+4.6; §Task 2 stays open). Gates: build/lint/test exit 0 + DI-boot sanity.
 
-**Previous cycles closed:** TODO-04 (external clients — all 3 tasks done,
-merged to `main` at `f0a979a`, pushed; `feat/external-clients` deleted in
-step 8 of this closure), TODO-03 (DTO layer), TODO-02 (foundation).
+**Previous cycles closed:** TODO-05 (orchestration service — merged to
+`main` at `5cf97ef`, pushed), TODO-04 (external clients — merged at
+`f0a979a`, pushed), TODO-03 (DTO layer), TODO-02 (foundation).
 
 ## Recent Changes
+
+- 2026-09-14: TODO-06 **Cycle A** — transactions controller & wiring
+  (§Task 1 + §Task 3 of `.agent/todos/20260913/20260913-todo-6.md`; global
+  plan `.kilo/plans/20260914-transactions-endpoint.md` G1–G10; cycle plan
+  `.kilo/plans/20260914-transactions-controller.md` CA-D1…CA-D8; branch
+  `feat/transactions-endpoint`). Step 3 bump: `eb65852` → v`0.5.0`.
+  4.2 commit **`d12676f`**: new `src/transactions/transactions.controller.ts`
+  (thin G3 handler — `@Controller('transactions')` + one `@Post()`;
+  `CreateTransactionDto` → global-guard **401** auth (G1: no
+  `@UseGuards`/`@Public()` — existing `APP_GUARD` is the single
+  enforcement) → global ValidationPipe **400** → direct relay of
+  `TransactionsService.create(dto)` ⇒ **201 envelope** or **bare 201**
+  (`undefined` + `@HttpCode(201)` nil-body send — G2, verified vs
+  `express-adapter.js` + health-probe precedent); legacy Swagger decorator
+  set + `@ApiBadGateway`/`@ApiInternalServerError`, verified
+  non-deprecated in installed `@nestjs/swagger` 11.4.7 (F1); operation
+  inherits doc-level `x-api-key` requirement (F4/CA-D3)) +
+  `transactions.module.ts` (`controllers: [TransactionsController]` +
+  truthful header). Single-commit deliverable (CA-D4). Gates (G9):
+  `npm run build` + `npm run lint` + `npm test` exit 0 + temp `DI-SANITY-OK`
+  boot (CA-D5, deleted after run). **Cycle A froze clients/DTOs/service
+  (G7): domain errors still propagate raw ⇒ currently Nest default 500 on
+  the live route; 502/503 mapping + compensation = Cycle B.** 4.3:
+  code-reviewer = **NO FIX PLAN**; code-simplifier = **NONE**. 4.4 docs
+  step (this bullet): comment-only JSDoc truth sweep across `src/`
+  (module verified; `app.module.ts`, `transactions.service.ts`, all 4 DTO
+  headers, both validators, `payment-method.enum.ts`,
+  `env.validation.ts` + `config.keys.ts` — every "no controller yet /
+  route 404s / zero outbound / bare-201 awaits the controller" statement
+  flipped to endpoint reality), `docs/app-setup.md` new "Transactions
+  endpoint (TODO-06 Cycle A)" section + behavior/wiring/pending-work flips
+  throughout, `.agent/project-structure.md` transactions line,
+  `architecture.md` dated entry + header STATUS + tree + flow-filter
+  statuses, this file. TODO-06 §Task 1/§3 `[DONE]` marks + 4.5b/4.6 are
+  still open steps; §Task 2 (Cycle B) pending.
 
 - 2026-09-14: TODO-05 step-5 closure — renamed `20260913-todo-5.md` →
   `20260913-todo-5-DONE.md` (commit `586ecbf`), merged to `main` via
@@ -317,19 +356,29 @@ step 8 of this closure), TODO-03 (DTO layer), TODO-02 (foundation).
 
 ## Immediate Next Steps
 
-1. **Transactions CONTROLLER TODO (next runtime cycle — user picks the task
-   file: `-todo-6.md`/`-todo-7.md` or new)** — registers the controller +
-   route `POST /v1/transactions` and binds `CreateTransactionDto` →
-   `TransactionsService.create(dto)` (the service is ALREADY implementable
-   since TODO-05); applies guard + Swagger `201` rendering; maps the raw
-   client/service errors to HTTP (global plan G18); finally decides the
-   compensation/saga for the accepted partial-write state; until then the
-   route 404s. The 201 bare vs envelope is already decided at the service
-   level (`TRANSACTIONS_RETURN_BODY` gate).
+1. **TODO-06 Cycle B — error handling & compensation (IN PROGRESS — same
+   TODO file `20260913-todo-6.md` §Task 2, same branch
+   `feat/transactions-endpoint`)** — global exception filter registered
+   via `APP_FILTER` in `app.module.ts` mapping domain errors per global
+   plan G4 (`NumeratorUnavailableError`/`NumeratorRetriesExhaustedError`/
+   `InvalidNumeratorValueError` → 503; `JsonServerRequestError`
+   status undefined/≥500 → 503, 4xx → 502; structured
+   `{ statusCode, message, error }` bodies; pass through guard 401 /
+   ValidationPipe 400 / router 404; no stack leak in production), and
+   partial-failure compensation per G5 (`TransactionCompensationService`:
+   `DELETE /transactions/:id` with retry loop + backoff from a
+   named-constants file; the ONE allowed try/catch around the
+   `createReceivable` call in `TransactionsService.create()`; on
+   compensation failure log ids-only and re-throw the ORIGINAL error) —
+   only then is the TODO §2.1 error table fully effective; until it
+   lands, those failures answer with the NestJS default 500 on the live
+   route and an orphan transaction may persist. 201 bare-vs-envelope
+   needs NO work (decided + live: service gate + direct relay).
 2. **Deferred test TODO (separate cycle):** unit tests first (pure
    `fee-rules.ts` ⇒ no DI; `TransactionsService` with mocked clients — verify the
    9-step order, gate both `TRANSACTIONS_RETURN_BODY` states, masking
-   call-site), then e2e once the controller route exists — `passWithNoTests`
+   call-site), then e2e against the now-live `POST /v1/transactions`
+   once Cycle B finalizes its error contract — `passWithNoTests`
    keeps the suite green until then.
 
 The backlog files `.agent/todos/20260913/20260913-todo-{5,6,7}.md` are now

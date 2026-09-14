@@ -12,9 +12,11 @@
  * `JsonServerModule` are registered here, making both services injectable
  * anywhere; each carries its own timeout-configured axios instance
  * (`HTTP_TIMEOUT_MS`). The orchestration service (`TransactionsModule`,
- * TODO-05) orchestrates both clients but NO route/controller exists yet,
- * so the clients still perform zero outbound HTTP calls until the
- * controller TODO wires an endpoint.
+ * TODO-05) orchestrates both clients and — since TODO-06 Cycle A
+ * (`TransactionsController`) — is reachable over HTTP through
+ * `POST /v1/transactions`, so outbound calls to the external services
+ * happen exactly when that route is invoked; boot itself performs zero
+ * outbound HTTP.
  *
  * Security (TODO-02 §5): `ApiKeyGuard` is registered globally through the
  * `APP_GUARD` token, so every route requires the `x-api-key` header unless

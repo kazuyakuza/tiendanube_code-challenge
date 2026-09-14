@@ -6,21 +6,26 @@
  * of TODO §Task 2 (both Numerator ids reserved BEFORE any write).
  *
  * Error behaviour (TODO §Task 5, T5-G8): NO try/catch — failures of
- * `getNextId()` or of either json-server write propagate untouched. A
+ * `getNextId()` or of either json-server write propagate untouched to
+ * `TransactionsController`, where they currently surface as the NestJS
+ * default 500: the structured 502/503 mapping of the TODO §2.1 error
+ * table lands with the TODO-06 Cycle-B global exception filter. A
  * transaction persisted but a receivable that fails leaves a PARTIALLY
- * WRITTEN state; this is accepted at this stage and compensation is next-
- * TODO scope (controller + global error handling). The caller must see the
- * raw failure.
+ * WRITTEN state; accepted at this commit — compensation lands with
+ * TODO-06 Cycle B (same branch, pending). The caller must see the raw
+ * failure.
  *
  * Logging (T5-G10): one debug line on success carrying ONLY the two numeric
  * string ids — never the payload (card data) and never amounts.
  *
- * AI-agent guidance: this service is INJECTABLE ONLY — no controller/route
- * calls it yet (controller TODO pending), so `create()` never executes in
- * the running app and the clients still send zero outbound HTTP. Pure rules
- * live in `./fee-rules`; see `docs/app-setup.md` → "Transactions
- * orchestration service (TODO-05)" for the flow, fee examples and how to
- * exercise it once the controller lands.
+ * AI-agent guidance: since TODO-06 Cycle A this service is injected by
+ * `TransactionsController` — `POST /v1/transactions` invokes `create()`
+ * end-to-end over HTTP, so outbound calls to Numerator / json-server
+ * happen exactly while that route is invoked (boot remains config reads
+ * only). Pure rules live in `./fee-rules`; see `docs/app-setup.md` →
+ * "Transactions endpoint (TODO-06 Cycle A)" and "Transactions
+ * orchestration service (TODO-05)" for the flow, fee examples and
+ * request recipes.
  */
 import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';

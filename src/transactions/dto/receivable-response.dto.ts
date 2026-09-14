@@ -9,8 +9,9 @@
  *
  * AI-agent guidance: `TransactionsService.create` nests the echoed
  * receivable body in `CreateTransactionResponseDto.receivable` since
- * TODO-05; Swagger renders it only once the (still pending) controller
- * TODO exists. Wire value invariants: all amounts (`subtotal`,
+ * TODO-05; since TODO-06 Cycle A it is rendered in Swagger `/docs` — the
+ * `TransactionsController` `@ApiCreatedResponse` schema on
+ * `POST /v1/transactions`. Wire value invariants: all amounts (`subtotal`,
  * `discount`, `total`) and ids are STRINGS, `status` carries
  * `ReceivableStatus` values — the business computations live in the
  * orchestration service (`src/transactions/fee-rules.ts`), never in this

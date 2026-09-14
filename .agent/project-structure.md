@@ -6,7 +6,7 @@
 - src/common/ - Cross-cutting concerns: API-key constants, @Public() decorator, ApiKeyGuard, shared payment enums (enums/), fee constants (constants/), card masking util (utils/)
 - src/config/ - Validated environment configuration: class-validator env schema (env.validation.ts) and ConfigService key constants (config.keys.ts)
 - src/health/ - Public unversioned liveness probe: HealthModule + HealthController (HEAD /health/ping, TODO-02 §4)
-- src/transactions/ - Transaction orchestration (TODO-05): TransactionsModule + TransactionsService (9-step create() flow, injectable only — no route) + pure fee-rules.ts; DTOs and custom validators in dto/; controller still pending the next TODO
+- src/transactions/ - Transaction orchestration + HTTP endpoint (TODO-05 service, TODO-06 Cycle A controller): TransactionsModule registers TransactionsController (POST /v1/transactions — live route: guard 401, ValidationPipe 400, 201 envelope/bare-201 via the TRANSACTIONS_RETURN_BODY service gate) + TransactionsService (9-step create() flow) + pure fee-rules.ts; DTOs and custom validators in dto/; exception-filter/502-503 mapping + compensation pending TODO-06 Cycle B
 - src/numerator/ - Numerator API client (TODO-04 Task 1): NumeratorService CAS retry loop (getNextId), NumeratorModule, tuning constants, domain errors (errors/) and wire interfaces (interfaces/)
 - src/json-server/ - json-server persistence client (TODO-04 Task 2): JsonServerService (createTransaction/createReceivable POSTs), JsonServerModule, resource-path constants, domain error (errors/) and transport payload interfaces (interfaces/)
 - test/ - e2e Jest config (jest-e2e.json); e2e specs arrive in later TODOs
