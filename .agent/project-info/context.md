@@ -4,19 +4,16 @@
 
 ## Current Work Focus
 
-TODO-03 "Transaction DTOs & Request Validation"
-(`.agent/todos/20260913/20260913-todo-3.md`; internally titled "TODO 02" —
-the filename is authoritative): consolidated cycle "TD" (Tasks 1–4) on
-branch `feat/transaction-dtos`, **steps 4.1b–4.4 complete** (implementation,
-review fix, documentation). Delivered the **contract layer** for
-`POST /v1/transactions`: request/response DTOs, two custom validators,
-shared enums, fee-percent constants, `maskCardNumber` and
-`TRANSACTIONS_RETURN_BODY` plumbing. Deliberately contract-only per TODO §6:
-no module/controller/service — the endpoint **still 404s**, Swagger `/docs`
-still shows only the health probe, and the env flag has no runtime consumer
-until TODO-04. Build + lint green. Remaining in this workflow: 4.5b
-plan-adherence, 4.6 `[DONE]` marks, step 5 merge. (TODO-02 closed earlier:
-merged to `main` at `d5abceb`, pushed.)
+**TODO-03 COMPLETE.** Merged `feat/transaction-dtos` into `main` and pushed
+to `origin` (step 5 of the Critical Workflow, 2026-09-14). The contract
+layer for `POST /v1/transactions` — request/response DTOs, two custom
+validators, shared enums, fee-percent constants, `maskCardNumber` and
+`TRANSACTIONS_RETURN_BODY` plumbing — now lives on `main`. Deliberately
+contract-only per TODO §6: no module/controller/service — the endpoint
+**still 404s**, Swagger `/docs` still shows only the health probe, and the
+env flag has no runtime consumer until TODO-04. TODO-02 was closed earlier
+(merged to `main` at `d5abceb`, pushed). No active workflow task remains
+from TODO-03.
 
 ## Recent Changes
 
@@ -39,8 +36,10 @@ merged to `main` at `d5abceb`, pushed.)
   checkpointed in step 2 — `30001` in the health curl JSDoc remains a
   flagged user typo, not workflow scope); simplification NONE. 4.4 docs:
   JSDoc headers on every new file, new "DTO & validation layer (TODO-03)"
-  section in `docs/app-setup.md`, architecture/context updates. **Not**
-  created (TODO §6): module/controller/service, tests, endpoint wiring.
+  section in `docs/app-setup.md`, architecture/context updates. 4.5b
+  plan-adherence: ADHERENT WITH ACCEPTED DEVIATIONS. 4.6: `[DONE]` marks
+  added to §§1–4. **Not** created (TODO §6): module/controller/service,
+  tests, endpoint wiring. Merged to `main` and pushed (step 5).
 
 - 2026-09-13: Global API-key guard (T5 of TODO-02, commit 4ac069f):
   `ApiKeyGuard` (`src/common/guards/api-key.guard.ts`) registered app-wide
@@ -117,6 +116,13 @@ merged to `main` at `d5abceb`, pushed.)
 
 ## Recorded Facts
 
+- TODO-03 is complete: all tasks `[DONE]`, merged to `main`, pushed to
+  `origin`. Feature branch `feat/transaction-dtos` deleted post-merge.
+- Flagged user-owned accepted deviations: (a) `30001` in
+  `health.controller.ts` curl JSDoc — pre-existing user typo, not workflow
+  scope; (b) `docker:*` scripts in `package.json` — pre-existing user
+  edits checkpointed in step 2. Both retained unchanged.
+
 - The Numerator mock (`numerator-api/numerator.js`) starts at value **3**; the
   json-server seed (`config/db.json`) already holds ids "1"–"3" for both
   `transactions` and `receivables`, so the next generated IDs will be "4", "5", …
@@ -131,20 +137,15 @@ merged to `main` at `d5abceb`, pushed.)
 
 ## Immediate Next Steps
 
-1. TODO-03 cycle TD closeout (this workflow): step 4.5b plan-adherence
-   verification, then 4.6 `[DONE]` marks for §§1–4 of
-   `20260913-todo-3.md` and the 4.3 review/plans bookkeeping.
-2. Critical Workflow step 5 (TODO-03 completion): rename
-   `.agent/todos/20260913/20260913-todo-3.md` with the `-DONE` suffix,
-   merge `feat/transaction-dtos` into `main`, delete the feature branch,
-   push `main` to `origin` only.
-3. TODO-04 (`20260913-todo-4.md`): transactions module/controller/service —
+1. TODO-04 (`20260913-todo-4.md`): transactions module/controller/service —
    makes `POST /v1/transactions` reachable (the TODO-03 DTO contract then
    answers **400** on invalid payloads via the global `ValidationPipe` and
    renders in Swagger `/docs`), wires the Numerator CAS + json-server clients,
    ID generation, fee math, masking on the write path, and becomes the first
    runtime consumer of `TRANSACTIONS_RETURN_BODY`.
-4. User-owned future TODO files `.agent/todos/20260913/20260913-todo-4.md`
-   and `.agent/todos/20260913/20260913-todo-5.md` exist **UNTRACKED** — kept
-   out of this workflow and its commits, the user owns them.
-   (`todo-3.md` itself is committed — `d70f5df`, workflow step 2.)
+2. TODO-05 (`20260913-todo-5.md`): exists untracked — user-owned, not yet
+   integrated into any workflow.
+
+Both `.agent/todos/20260913/20260913-todo-4.md` and
+`.agent/todos/20260913/20260913-todo-5.md` are **UNTRACKED** user-owned
+future work — kept out of this workflow and its commits.
