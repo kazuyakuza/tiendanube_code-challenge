@@ -200,3 +200,34 @@ per G4. Result gates green per G9.
   **auto-approved** (no per-plan user gates). Two cycles confirmed: A
   (Task 1 + Task 3, controller & wiring), B (Task 2, error handling &
   compensation). Execution started from workflow step 2.
+
+## 9. Run summary (post-execution log — appended at step 5)
+
+- **Step 2:** global plan committed on `main` (`259f58b`); branch
+  `feat/transactions-endpoint` created. **Step 3:** `eb65852` → v`0.5.0`.
+- **Cycle A** (Task 1 + Task 3): 4.1b plan `20260914-transactions-controller.md`
+  (CA-D1…D8; verified legacy Swagger set live in @nestjs/swagger 11.4.7;
+  express-adapter nil-body proves G2). 4.2 `d12676f` controller + module
+  (`DI-SANITY-OK` temp). 4.3 = NO FIX / NO SIMPLIFICATION. 4.4 `9ed4ca7`
+  endpoint docs + comment-only JSDoc truth sweep. 4.5b `...-controller-adherence.md`
+  ADHERENT. 4.6 `8133d5a` [DONE] §Task 1/§Task 3 + cycle-A plan archive.
+- **Cycle B** (Task 2): 4.1b plan `20260914-error-handling-compensation.md`
+  (CB-D1…D8: single catch-all `AllExceptionsFilter` via APP_FILTER, verbatim
+  domain messages, log-only stack rule, flat `TransactionCompensationService`
+  non-throwing 3-attempt backoff DELETE w/ 404=success, single service
+  try/catch rethrowing ORIGINAL error; 502 chosen over 500 for json-server 4xx).
+  4.2 `2416915`+`1b73935`+`271c94b` (`ERROR-SANITY-OK` temp). 4.3 review FIX
+  PLAN (single-section-boolean-conditions rule: extract `isNumeratorError`/
+  `isUpstreamFailure`) + simplify plan (module comment, reason hoist) →
+  4.3-fix `35d314d` (accepted TS type-predicate deviation) + `6e709f9`.
+  4.4 `30aeee1` error-handling docs section + fault-injection user recipes +
+  client-header description-only sweep. 4.5b
+  `20260914-transaction-error-handling-adherence.md`: PASS,
+  ARCHIVE-READINESS YES. 4.6 `f98d714` [DONE] §Task 2 + cycle-B archive.
+- **Step 5:** this commit on feature branch, then archive-rename
+  `20260913-todo-6-DONE.md`, merge `--no-ff` to `main`, branch delete,
+  push `origin` ONLY. Gates green throughout (build/lint/test exit 0 every
+  commit; live HTTP verification intentionally user-run per G9).
+- **Deviations vs original global plan:** G9 gates honored + direct-invoke
+  runtime proofs added (CB-D8/CA-D5); R1 resolved legacy set present in v11.4.7;
+  R4 resolved adapter-verified; R2 pass-through proven; no scope drift.
