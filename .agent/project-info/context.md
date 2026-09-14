@@ -4,31 +4,39 @@
 
 ## Current Work Focus
 
-**TODO-04 IN PROGRESS** — external clients (Numerator API + json-server), on
-branch `feat/external-clients` (v `0.3.0`). **Tasks 1 & 2 — Numerator and
-json-server clients — implemented and documented** (Task 1: 4.2 commits
-fa9f723 / c18eda4 / b36b53c / d56eab3, §Task 1 marked `[DONE]`; Task 2:
-4.2 commits c827d8b / de84780 / 7af33e9; 4.3 review: no fixes; 4.3
-simplification: none; 4.4 docs landed; §Task 2 since marked `[DONE]`).
-`src/json-server/` ships
-`JsonServerService.createTransaction/createReceivable` — **transport-only**
-`@nestjs/axios` POSTs to the two collections (no id generation, fees,
-masking, field defaulting or retries — fail-fast per TODO §Out of scope) —
-with the single `JsonServerRequestError` (`resource` +
-`status: number | undefined`, `undefined` on network/timeout/non-axios +
-payload-free message; card data never logged or serialized). **Tasks 1 & 2
-are `[DONE]` in the TODO file; Task 3 — module registration — is now
-implemented and documented** (single 4.2 commit `7a4a149`; review 4.3 = no
-fix plan, simplification = none). Both `NumeratorModule` and
-`JsonServerModule` are imported in `AppModule` (G14), each using per-module
-`HttpModule.register({ timeout: HTTP_TIMEOUT_MS })` — `HTTP_TIMEOUT_MS =
-4000` in `src/common/constants/http-timeout.constants.ts` (v4 has no
-`forRoot`; decisions T1-D7/T3-D1/T3-D2, isolated configured instances). Both
-services construct at boot (config reads only) and are injectable app-wide
-— the TODO's closing guidance is satisfied. The app still performs **no
-outbound HTTP at runtime** because no controller/orchestration endpoint
-calls the clients yet. Remaining for this TODO: Task 3's 4.5b adherence +
-4.6 `[DONE]` mark, then workflow step 5. TODO-03 and TODO-02
+**TODO-04 EXECUTION COMPLETE — workflow step 5 pending** (merge
+`feat/external-clients` → `main`, push). All three tasks closed on
+branch `feat/external-clients` (v `0.3.0`), all `[DONE]` in `20260913-todo-4.md`
+(⚠️ file content still refers to the task numbers as their own §headings;
+rename to `-DONE` suffix happens within step 5):
+
+- **Task 1 — Numerator client** (`NumeratorService.getNextId(): Promise<string>`,
+  CAS retry loop, conflict-only retry G5, domain errors, env knobs
+  `MAX_RETRIES`+`NUMERATOR_BASE_BACKOFF_MS`): commits `fa9f723`…`d56eab3` +
+  docs `917e72c`; 4.5b ADHERENT; plan artifacts `5cd3196`.
+- **Task 2 — json-server client** (`createTransaction`/`createReceivable` —
+  transport-only POSTs via `HttpService`+`firstValueFrom`, echoed body with
+  TYPE-only DTO typing, fail-fast `JsonServerRequestError(resource,
+  status|undefined, reason)` never carrying payload; T2-D1…D13): commits
+  `c827d8b`/`de84780`/`7af33e9` + docs `36210e5` (incl. T2-D12 config-JSDoc
+  sweep, new `docs/json-server-client.md`); 4.3 clean; 4.5b ADHERENT;
+  artifacts `46655f9`.
+- **Task 3 — module registration**: single commit `7a4a149` —
+  `HTTP_TIMEOUT_MS = 4000` (`src/common/constants/http-timeout.constants.ts`)
+  via per-module `HttpModule.register({ timeout })` (v4 has NO `forRoot` —
+  T3-D1/T3-D2) and both client modules imported in `AppModule` (G14);
+  services frozen; `DI-SANITY-OK` via temp script T3-D3 (deleted, never
+  committed); no structure-map delta; docs `b057491` swept every
+  "Task 3 pending" pointer in app-setup/json-server-client/architecture/
+  context; 4.3 clean; 4.5b ADHERENT (report
+  `20260913-client-modules-registration-adherence.md`); 4.6 archive
+  `8d397a3`.
+
+Both services are now injectable app-wide and construct at boot (config
+reads only); the app still performs **zero outbound HTTP** — no
+controller/orchestration endpoint calls them yet (explicitly next-TODO land,
+TODO §Out of scope). Global plan annotated with post-execution verification
+notes (G12 forRoot→register, G15 zero-delta). TODO-03 and TODO-02
 were closed earlier (both merged to `main` and pushed).
 
 ## Recent Changes
