@@ -37,7 +37,7 @@ export class TransactionResponseDto {
 
   @ApiProperty({
     description: 'Masked card number: only the last 4 digits are stored or returned.',
-    example: '1203',
+    example: '1111',
   })
   cardNumber: string;
 

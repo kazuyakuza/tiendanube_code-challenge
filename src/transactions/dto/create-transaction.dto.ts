@@ -42,7 +42,7 @@ export class CreateTransactionDto {
 
   @ApiProperty({
     description: 'Full card number as received from the client (13–19 digits). Only the last 4 digits are ever stored or returned.',
-    example: '5221456987541203',
+    example: '4111111111111111',
   })
   @IsString()
   @Matches(/^\d{13,19}$/)
