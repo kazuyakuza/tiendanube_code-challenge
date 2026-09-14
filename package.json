@@ -1,6 +1,6 @@
 {
   "name": "tiendanube-code-challenge",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "NestJS orchestration API for the Tiendanube code challenge",
   "private": true,
   "license": "UNLICENSED",
