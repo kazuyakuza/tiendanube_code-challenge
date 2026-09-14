@@ -8,6 +8,13 @@
  * public unversioned `HEAD /health/ping` probe, exempted from auth via
  * `@Public()`).
  *
+ * External clients (TODO-04 Task 3, G14): `NumeratorModule` and
+ * `JsonServerModule` are registered here, making both services injectable
+ * anywhere; each carries its own timeout-configured axios instance
+ * (`HTTP_TIMEOUT_MS`). There is still NO business route/controller — the
+ * clients perform zero outbound HTTP calls until the orchestration TODO
+ * (later) wires them to an endpoint.
+ *
  * Security (TODO-02 §5): `ApiKeyGuard` is registered globally through the
  * `APP_GUARD` token, so every route requires the `x-api-key` header unless
  * exempted with `@Public()`. Run guide: `docs/app-setup.md`.
@@ -18,6 +25,8 @@ import { ConfigModule } from '@nestjs/config';
 import { ApiKeyGuard } from './common/guards/api-key.guard';
 import { validateEnv } from './config/env.validation';
 import { HealthModule } from './health/health.module';
+import { NumeratorModule } from './numerator/numerator.module';
+import { JsonServerModule } from './json-server/json-server.module';
 
 @Module({
   imports: [
@@ -27,6 +36,8 @@ import { HealthModule } from './health/health.module';
       validate: validateEnv,
     }),
     HealthModule,
+    NumeratorModule,
+    JsonServerModule,
   ],
   providers: [{ provide: APP_GUARD, useClass: ApiKeyGuard }],
 })

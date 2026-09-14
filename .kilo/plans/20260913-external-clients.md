@@ -112,3 +112,9 @@ Step 6: Resume + next-TODO handoff text => planner
 - CAS conflict detection depends on the mock's error-body shape (G5); a stricter/looser `currentNumerator` presence check is the only real functional risk → covered by review cycle 4.3.
 - `MAX_RETRIES` is a generic env name; adopting TODO's literal name (G1) over `NUMERATOR_MAX_RETRIES` to stay verbatim with the task spec.
 - `@nestjs/axios` v4 `HttpModule.forRoot` API surface must be verified against installed package before coding G12.
+
+## Post-execution verification notes (appended 2026-09-14 by Planner; global plan otherwise unchanged)
+
+- **G12 SUPERSEDED-in-part**: installed `@nestjs/axios` v4 has NO `forRoot` — coding must use `HttpModule.register({ timeout: HTTP_TIMEOUT_MS })` (per-module isolated configured instance). Evidence: `node_modules/@nestjs/axios/dist/http.module.d.ts:4` + `http.module.js:20-35`; recorded as decisions T1-D7 / T3-D1 / T3-D2 in `.kilo/plans/20260913-numerator-client.md` and `.kilo/plans/20260913-client-modules-registration.md`. The timeout VALUE (4000 ms) and the constants-file location stand as decided.
+- **G15 RESOLVED with zero Task-3 deltas**: structure map already gained `src/numerator/` (T1-D3) and `src/json-server/` (Task 2) in their own commits; `http-timeout.constants.ts` is a file in the already-mapped `src/common/constants/`, so Task 3 maps nothing new.
+- Task outcomes: Task 1 (Numerator) and Task 2 (json-server client) closed through 4.6; Task 3 code = single commit `7a4a149`, review/simplification clean, docs swept in `b057491`.

@@ -11,7 +11,13 @@ header (missing or wrong → **401**), with `HEAD /health/ping` exempt via
 `@Public()` — plus the TODO-03 contract layer for `POST /v1/transactions`
 (request/response DTOs, custom validators, shared enums/constants and the
 card-masking helper: compiled, **not yet wired to a route** — see
-[DTO & validation layer (TODO-03)](#dto--validation-layer-todo-03)).
+[DTO & validation layer (TODO-03)](#dto--validation-layer-todo-03)) — and the two
+external clients of TODO-04: the **Numerator client** (`src/numerator/`,
+Task 1) and the **json-server client** (`src/json-server/`, Task 2), both
+**registered in `AppModule` since Task 3** with the shared 4 s axios timeout;
+they boot with the app yet still perform no live traffic, because no business
+endpoint calls them —
+see [External clients (TODO-04)](#external-clients-todo-04)).
 See [API behavior at this stage](#api-behavior-at-this-stage)
 and [Plan references](#plan-references).
 
@@ -25,6 +31,7 @@ and [Plan references](#plan-references).
 - [Run modes](#run-modes)
 - [API behavior at this stage](#api-behavior-at-this-stage)
 - [DTO & validation layer (TODO-03)](#dto--validation-layer-todo-03)
+- [External clients (TODO-04)](#external-clients-todo-04)
 - [Verify](#verify)
 - [npm scripts](#npm-scripts)
 - [Plan references](#plan-references)
@@ -49,7 +56,16 @@ docker compose up
 | json-server   | `http://localhost:8080` | Fake DB: transactions + receivables    |
 | Numerator API | `http://localhost:3000` | Sequential ID generation (mock)        |
 
-The NestJS app does **not** talk to these services yet (wired in later TODOs).
+Status vs. the code (TODO-04): **both clients exist and are now wired** —
+`src/numerator/` (Task 1) and `src/json-server/` (Task 2) are registered in
+`AppModule` (Task 3, commit `7a4a149`), each with its own timeout-configured
+axios instance, see
+[External clients (TODO-04)](#external-clients-todo-04) — but no business
+endpoint calls them yet, so the **running app still makes no outbound call to
+either service**. You can exercise the
+Numerator contract directly with the curl recipes in that section — no
+NestJS app involved (json-server wire-shape recipes:
+[json-server client guide](json-server-client.md)).
 
 ## Install
 
@@ -71,8 +87,9 @@ cp .env.example .env
 `.env` is gitignored (local only); `.env.example` is the only committed env
 file and carries only placeholder/example values (see its comments for each
 key: `NODE_ENV`, `PORT`, `NUMERATOR_API_URL`, `JSON_SERVER_URL`, `API_KEY`,
-`SWAGGER_ENABLED`, and the optional `CORS_ORIGINS` and
-`TRANSACTIONS_RETURN_BODY` notes).
+`SWAGGER_ENABLED`, the optional `CORS_ORIGINS` and
+`TRANSACTIONS_RETURN_BODY` notes, and the commented-out optional Numerator
+resilience knobs `MAX_RETRIES` / `NUMERATOR_BASE_BACKOFF_MS`).
 
 **Current-phase truth:** the app loads and validates `.env` at startup and now
 **consumes** it. The global `ConfigModule` (TODO-02 §2, implemented) reads
@@ -97,12 +114,14 @@ literal key strings (see `brief.md` §4.1 and global-plan decisions G4/G5).
 |---------------------|----------|------------------------------------------------------|----------------------------------------------------------------------------|----------------------------|
 | `NODE_ENV`          | yes      | enum: `development` \| `production` \| `test`        | Environment name; also selects the morgan log format (`dev` vs `combined`) | `development`              |
 | `PORT`              | yes      | integer > 0 (coerced from the raw env string)        | App listen port — consumed by the `main.ts` bootstrap                      | `3001`                     |
-| `NUMERATOR_API_URL` | yes      | valid URL **including protocol** (TLD not required)  | Numerator API base URL (future client wiring)                              | `http://localhost:3000`    |
-| `JSON_SERVER_URL`   | yes      | valid URL **including protocol** (TLD not required)  | json-server base URL (future client wiring)                                | `http://localhost:8080`    |
+| `NUMERATOR_API_URL` | yes      | valid URL **including protocol** (TLD not required)  | Numerator API base URL — consumer: `NumeratorService` via `getOrThrow` at boot (TODO-04 Task 1; active since Task 3 registered the module) | `http://localhost:3000`    |
+| `JSON_SERVER_URL`   | yes      | valid URL **including protocol** (TLD not required)  | json-server base URL — consumer: `JsonServerService` via `getOrThrow` at boot (TODO-04 Task 2; active since Task 3 registered the module) | `http://localhost:8080`    |
 | `API_KEY`           | yes      | non-empty string                                     | Key the global `ApiKeyGuard` matches against `x-api-key` on every request (T5, active) | `your-secret-api-key-here` |
 | `SWAGGER_ENABLED`   | no       | `"true"` \| `"false"`, default `true`                | Swagger UI (`/docs`) on/off switch — consumed at bootstrap                 | `true`                     |
 | `CORS_ORIGINS`      | no       | comma-separated origins; absent/blank ⇒ allow all    | CORS allowlist — consumed by the `main.ts` bootstrap                       | `http://localhost:5173`    |
-| `TRANSACTIONS_RETURN_BODY` | no | `"true"` \| `"false"`, default `true`         | When `false`, `POST /v1/transactions` answers a bare `201 CREATED` instead of the full `{ transaction, receivable }` body (TODO-03 §2.4; plumbing only — runtime consumer arrives in TODO-04) | `true` |
+| `TRANSACTIONS_RETURN_BODY` | no | `"true"` \| `"false"`, default `true`         | When `false`, `POST /v1/transactions` answers a bare `201 CREATED` instead of the full `{ transaction, receivable }` body (TODO-03 §2.4; plumbing only — runtime consumer arrives with the future orchestration controller, a later TODO — controllers are out of TODO-04's scope) | `true` |
+| `MAX_RETRIES` | no | integer ≥ 1, default `10` (in-code, `src/numerator/numerator.constants.ts`) | **Total** CAS attempts per `NumeratorService.getNextId()` call — not extra retries (TODO-04 Task 1 §1.3) | `10` |
+| `NUMERATOR_BASE_BACKOFF_MS` | no | integer ≥ 1, default `20` (same file) | Base backoff for the conflict-retry sleep: `min(base × 2^retryIndex, 160 ms cap)` (TODO-04 Task 1 §1.3) | `20` |
 
 **Fail-fast behavior:** with an invalid `.env` the application **refuses to
 start**. Validation throws a single `Invalid environment configuration` error
@@ -114,17 +133,23 @@ silent fallback for required variables; fix `.env` and boot again.
 **Committed vs. local:** only `.env.example` (placeholders) is committed; your
 own `.env` is gitignored. Never put real secrets in `.env.example`.
 
-**Consumed now vs. later:** five variables already have live consumers of
-the validated `ConfigService`. The `main.ts` bootstrap (TODO-02 §3,
+**Consumed now vs. later:** every validated `ConfigService` variable now
+has a consumer **except** `TRANSACTIONS_RETURN_BODY`. The `main.ts` bootstrap (TODO-02 §3,
 implemented) reads `PORT` (listen port, `getOrThrow`), `NODE_ENV` (selects
 the morgan log format), `CORS_ORIGINS` (CORS allowlist; absent ⇒ allow all)
 and `SWAGGER_ENABLED` (mounts `/docs` or not; absent ⇒ enabled); the global
-`ApiKeyGuard` (TODO-02 §5, implemented) checks `API_KEY` on every request.
-Still validated but **not yet consumed**: the two service URLs
-(external-service clients of later TODOs) and `TRANSACTIONS_RETURN_BODY`
-(TODO-03 §2.4 plumbing only — the TODO-04 transactions controller is its
-first runtime consumer; see
-[DTO & validation layer (TODO-03)](#dto--validation-layer-todo-03)).
+`ApiKeyGuard` (TODO-02 §5, implemented) checks `API_KEY` on every request;
+`NumeratorService` (TODO-04 Task 1) resolves `NUMERATOR_API_URL` via
+`getOrThrow` at construction, plus the optional `MAX_RETRIES` /
+`NUMERATOR_BASE_BACKOFF_MS` knobs via `get(key, default)`; and
+`JsonServerService` (TODO-04 Task 2) resolves `JSON_SERVER_URL` via
+`getOrThrow` at construction. **Boot state (since Task 3):**
+`NumeratorModule` and `JsonServerModule` are registered in `AppModule`, so
+both client instances are constructed at startup and those config reads
+execute then — the clients simply have no endpoint calling them, so no
+outbound request is ever sent today. Still without any consumer:
+`TRANSACTIONS_RETURN_BODY`
+(see [DTO & validation layer (TODO-03)](#dto--validation-layer-todo-03)).
 
 ## Run modes
 
@@ -296,8 +321,9 @@ logic or tests were created**. Consequences an agent must know today:
   other non-health route (see
   [API behavior at this stage](#api-behavior-at-this-stage)).
 - Swagger `/docs` still lists **only the health probe**; the DTOs carry full
-  `@ApiProperty` metadata but nothing renders it until TODO-04 declares the
-  endpoint.
+  `@ApiProperty` metadata but nothing renders it until the orchestration
+  layer declares the endpoint (later TODO — TODO-04 ships the clients, not
+  the endpoint).
 - `TRANSACTIONS_RETURN_BODY` has **no runtime consumer yet** (toggle contract
   below).
 
@@ -312,7 +338,7 @@ logic or tests were created**. Consequences an agent must know today:
 | `common/constants/payment-fee.constants.ts` | `PAYMENT_FEE_PERCENTAGES`: debit `"2"`, credit `"4"` — fee **percentage strings**, not amounts |
 | `common/utils/card-number.util.ts` | `maskCardNumber()`: pure last-4-digits helper |
 
-### What the contract guarantees (once the route is wired in TODO-04)
+### What the contract guarantees (once the orchestration route is wired — later TODO)
 
 `CreateTransactionDto` field rules — invalid payloads are rejected with
 **400** by the *existing* global `ValidationPipe`
@@ -348,7 +374,7 @@ passing the validator on 2028-05-01; refresh all expiration examples at once
 
 The request DTO **accepts the full card number** — that is what the client
 sends. The last-4-only rule is an output/persistence invariant: the future
-TODO-04 service layer truncates with `maskCardNumber()`
+orchestration service layer (later TODO) truncates with `maskCardNumber()`
 (`src/common/utils/card-number.util.ts`) before storing to json-server and
 answering; nothing stores or returns the full PAN. The helper is already in
 the repo but is **not called by anything yet**.
@@ -357,15 +383,17 @@ the repo but is **not called by anything yet**.
 
 Optional boolean env var, default `true`, mirroring the `SWAGGER_ENABLED`
 pattern (schema + `ConfigKeys.TransactionsReturnBody` + `.env.example`; the
-env table above has its row). The toggled behavior belongs to the TODO-04
-controller: `true` ⇒ 201 with the full `{ transaction, receivable }` body,
+env table above has its row). The toggled behavior belongs to the orchestration
+controller (later TODO; TODO-04 ships clients only): `true` ⇒ 201 with the full
+`{ transaction, receivable }` body,
 `false` ⇒ bare `201 CREATED`. **Setting it today has no observable effect** —
 TODO-03 ships plumbing only (user-approved global-plan §5 resolution).
 
 ### Verifying the contract today
 
 Runtime exercises (curl against the endpoint, Swagger rendering, validator
-REPL checks) are TODO-04 scope — out of scope for this cycle (TODO-03 §6:
+REPL checks) belong to the future orchestration TODO that wires the route —
+out of scope for this cycle (TODO-03 §6:
 no tests). The current green signal for the layer is that it compiles and
 lints as part of the app:
 
@@ -377,6 +405,148 @@ npm run lint    # exit 0
 Each new file's JSDoc header records its purpose, TODO-03 section, exact
 validator semantics/messages and its next consumers (TODO-04
 controller/service/specs).
+
+## External clients (TODO-04)
+
+TODO-04 builds the two outbound HTTP clients (@nestjs/axios `HttpService`
+only — no other HTTP library). **All three tasks are implemented** on branch
+`feat/external-clients`: Task 1 (Numerator client), Task 2 (json-server
+client) and **Task 3 (module registration + HTTP timeout)** — both modules
+are now wired into `AppModule` and both clients boot with a 4 s Axios
+timeout (commit `7a4a149`). Everything below describes what exists today;
+no client performs live traffic at runtime only because **no business
+endpoint calls them yet** (orchestration stays out of TODO-04's scope).
+
+### Numerator client — `src/numerator/` (Task 1)
+
+| Artifact | Role |
+|----------|------|
+| `numerator.service.ts` — `NumeratorService.getNextId(): Promise<string>` | The single public method: returns one unique sequential ID as a **string** (json-server string-id convention) |
+| `numerator.module.ts` | `@Module` importing `HttpModule.register({ timeout: HTTP_TIMEOUT_MS })` — its own isolated configured axios instance (v4 has no `forRoot` — T1-D7/T3-D1); exports the service; **registered in `AppModule`** (Task 3, G14) |
+| `numerator.constants.ts` | In-code defaults: `NUMERATOR_DEFAULT_MAX_RETRIES = 10`, `NUMERATOR_DEFAULT_BASE_BACKOFF_MS = 20`, backoff cap `MAX_NUMERATOR_BACKOFF_MS = 160`, `CAS_CONFLICT_STATUS = 400` |
+| `../common/constants/http-timeout.constants.ts` | `HTTP_TIMEOUT_MS = 4000` — the shared timeout both client modules pass to `HttpModule.register` (Task 3, G12) |
+| `errors/numerator.errors.ts` | Domain errors: `NumeratorUnavailableError`, `NumeratorRetriesExhaustedError`, `InvalidNumeratorValueError` |
+| `interfaces/` | Wire shapes of the mock + retry-loop param/result objects (2-params rule) |
+
+**Behavior of `getNextId()`** (TODO §1.3, global plan G5–G7): each of up to
+`MAX_RETRIES` **total attempts** does `GET /numerator` → validate the value
+is a finite number and `current + 1` a safe integer (otherwise
+`InvalidNumeratorValueError`, **never retried**) → `PUT
+/numerator/test-and-set { oldValue, newValue }`. On success the method
+returns `String(candidate)`; the CAS is treated as atomic, so no other
+caller can obtain the same ID. Each retry **re-reads** the current value —
+the `currentNumerator` from a conflict body is used for logging only.
+
+**Retry vs. fail-fast:** only a **genuine CAS conflict** retries — HTTP 400
+whose body carries a numeric `currentNumerator`. Between attempts the client
+sleeps `min(NUMERATOR_BASE_BACKOFF_MS × 2^retryIndex, 160 ms)` (no sleep
+after the final conflict). Budget exhausted →
+`NumeratorRetriesExhaustedError` (carries the attempt budget + last observed
+value). Every other failure — network, timeout, 5xx, or a 400 **without**
+`currentNumerator` (the mock's invalid-params shape) — aborts immediately as
+`NumeratorUnavailableError`, so orchestration can stop before writing
+anything. Conflicts log a `warn` line (attempt, current, candidate);
+numerator values are non-sensitive, and card data must never appear in these
+logs (global plan G13). Mapping any of these errors to HTTP responses (e.g.
+503) is **not** this client's job — deferred to the orchestration layer
+(global plan G18).
+
+**Config flow:** all reads go through `ConfigService` + `ConfigKeys` — never
+`process.env`. `NUMERATOR_API_URL` is required (`getOrThrow` in the service
+constructor — Task 1 is its first consumer); `MAX_RETRIES` and
+`NUMERATOR_BASE_BACKOFF_MS` are **optional** and read with
+`get(key, default)`; the defaults live only in `numerator.constants.ts`, so
+existing `.env` files boot unchanged (global plan G3). **Wired state:**
+`NumeratorModule` is registered in `AppModule` (Task 3), so the service is
+constructed on every boot and resolves its config reads then — and its
+`HttpModule` import uses the timeout-configured
+`HttpModule.register({ timeout: HTTP_TIMEOUT_MS })` form (`@nestjs/axios`
+**v4 has no `forRoot`** — decision T1-D7, applied by plan decision T3-D1).
+`npm run start:dev` still exercises none of the HTTP path, because no
+controller calls `getNextId()` yet.
+
+### json-server client — `src/json-server/` (Task 2)
+
+Full guide — endpoints + §2.4 payload tables, failure model, privacy rule,
+curl wire-shape exercise: **[json-server client (TODO-04 Task 2)](json-server-client.md)**.
+Summary of the committed surface:
+
+| Artifact | Role |
+|----------|------|
+| `json-server.service.ts` — `createTransaction(payload)` / `createReceivable(payload)` | Transport-only POSTs to the two collections via `HttpService`; return the echoed resource body (typed `TransactionResponseDto` / `ReceivableResponseDto`, imported **type-only** per G11) |
+| `json-server.module.ts` | `@Module` importing `HttpModule.register({ timeout: HTTP_TIMEOUT_MS })` — its own isolated configured axios instance, separate from the Numerator client's (T3-D2); exports the service; **registered in `AppModule`** (Task 3, G14) |
+| `json-server.constants.ts` | Resource-path constants `transactions` / `receivables` (no timeout constant — the shared `HTTP_TIMEOUT_MS` lives in `src/common/constants/http-timeout.constants.ts`, added by Task 3) |
+| `errors/json-server.errors.ts` | `JsonServerRequestError` — `resource` + `status: number \| undefined` (`undefined` on network/timeout/non-axios failures) + payload-free message |
+| `interfaces/` | The two §2.4 transport payload types + 2-params-rule param objects |
+
+- **What it never does:** generate ids, calculate fees, mask card numbers,
+  default fields (even `create_date`), assert the 201 status (T2-D3) or
+  **retry** — fail-fast is explicit TODO-04 §Out of scope policy; mapping
+  failures to HTTP responses is the orchestration layer's job (G18).
+- **Config:** `JSON_SERVER_URL` via `ConfigService.getOrThrow` at
+  construction; trailing slashes normalized once (T2-D1). **No new env
+  key arrived with this task** — the variable was validated since TODO-02.
+- **Privacy:** payloads carry card data — never logged and never
+  serialized into error messages; the only log line is one failure `warn`
+  with resource + status (T2-D7).
+- Unit/e2e tests for this client are deferred to a later TODO (TODO-04
+  out-of-scope list).
+
+### Contract exercises — curl against the Numerator mock (no docker commands from this guide)
+
+The recipes below are transcribed from the mock source
+(`numerator-api/api.js` + `numerator-api/numerator.js`) and were **not
+live-verified during this docs cycle** — the services may or may not be
+running. The mock is started via `docker compose up` at the repo root, but
+**never run docker commands autonomously from an agent session — ask the
+user** (TODO-04 §Context). If `localhost:3000` refuses connections, that
+just means the service is down; the expected shapes below document
+the exact traffic `NumeratorService` sends when `getNextId()` runs (the
+client is now wired, but still nothing calls it until the orchestration
+TODO provides an endpoint).
+
+PowerShell (always `curl.exe`; JSON bodies need the `\"` escaping):
+
+```powershell
+# 1) Current value — 200, e.g. {"numerator":3} (the mock starts at 3 but advances with use)
+curl.exe -s http://localhost:3000/numerator
+
+# 2) Successful CAS (assume GET returned 3) — 200 {"numerator":4}
+curl.exe -s -X PUT http://localhost:3000/numerator/test-and-set `
+  -H "Content-Type: application/json" -d '{\"oldValue\":3,\"newValue\":4}'
+
+# 3) Conflict — repeat call 2: oldValue 3 is now stale —
+#    400 {"error":"Numerator does not match the expected old value.","currentNumerator":4}
+curl.exe -s -X PUT http://localhost:3000/numerator/test-and-set `
+  -H "Content-Type: application/json" -d '{\"oldValue\":3,\"newValue\":4}'
+
+# 4) Invalid params — 400 {"error":"Invalid values for test-and-set."}
+#    NOTE: NO currentNumerator — this is exactly the shape the client must
+#    NOT retry (global plan G5 discriminator; compare with call 3)
+curl.exe -s -X PUT http://localhost:3000/numerator/test-and-set `
+  -H "Content-Type: application/json" -d '{\"oldValue\":\"x\",\"newValue\":4}'
+```
+
+State mutation warning: each **successful** PUT (call 2) permanently bumps
+the mock's in-memory counter until the container restarts; the conflict and
+invalid-params calls (3 and 4) change nothing. Call 1 (`GET`) is read-only.
+
+### Wiring status & pending work
+
+- **Task 3 — done (commit `7a4a149`):** **both** modules
+  (`NumeratorModule`, `JsonServerModule`) are imported in `AppModule` (G14)
+  and each configures its Axios instance via
+  `HttpModule.register({ timeout: HTTP_TIMEOUT_MS })` —
+  `HTTP_TIMEOUT_MS = 4000` from
+  `src/common/constants/http-timeout.constants.ts` (per the TODO
+  §Configuration & resilience 3–5 s guidance; v4 has no `forRoot` —
+  T1-D7/T3-D1). Both services are injectable app-wide from here on; they
+  boot with config reads only and still send **zero outbound requests**
+  because no controller/orchestration exists yet (out of TODO-04 scope).
+- **Still out of scope (not built):** orchestration, fee calculation,
+  card-number masking, controller endpoints — later TODOs own them.
+- **Tests:** unit/e2e suites for both clients are explicitly deferred by
+  TODO-04 (§Out of scope) to a later TODO.
 
 ## Verify
 
@@ -470,11 +640,31 @@ of scope for TODO-02 and arrive in later work.
   [`.kilo/plans/20260913-todo-3-transaction-dtos-impl.md`](../.kilo/plans/20260913-todo-3-transaction-dtos-impl.md);
   source TODO: [`.agent/todos/20260913/20260913-todo-3.md`](../.agent/todos/20260913/20260913-todo-3.md)
   §§ Task 1–4
+- TODO-04 global plan (external clients — Numerator + json-server; binding
+  decisions G1–G19):
+  [`.kilo/plans/20260913-external-clients.md`](../.kilo/plans/20260913-external-clients.md);
+  Task 1 (Numerator client) implementation plan (decisions T1-D1–T1-D8,
+  incl. T1-D6 architecture reconciliation and the T1-D7 finding that
+  `@nestjs/axios` v4 exposes `HttpModule.register`, not `forRoot`):
+  [`.kilo/plans/20260913-numerator-client.md`](../.kilo/plans/20260913-numerator-client.md);
+  Task 2 (json-server client) implementation plan (decisions
+  T2-D1…T2-D13 — base-URL normalization, no 201 assertion, payload-free
+  logs/errors, bare-module preview, deferred config-JSDoc sweep):
+  [`.kilo/plans/20260913-jsonserver-client.md`](../.kilo/plans/20260913-jsonserver-client.md);
+  Task 3 (module registration) implementation plan (decisions T3-D1 `register`
+  not `forRoot`, T3-D2 per-module isolated instances, T3-D3 temp DI-sanity
+  script): [`.kilo/plans/20260913-client-modules-registration.md`](../.kilo/plans/20260913-client-modules-registration.md);
+  source TODO: [`.agent/todos/20260913/20260913-todo-4.md`](../.agent/todos/20260913/20260913-todo-4.md)
+  §Task 1–§Task 3 + §"Configuration & resilience" (all three tasks
+  implemented; §Task 3 carries the workflow's final `[DONE]` mark once
+  its 4.5b/4.6 steps close)
 
 ## Related docs
 
 - [Challenge statement](../README.md) — original task brief (localized: [es-ar](../README-es-ar.md), [pt-br](../README-pt-br.md)); unchanged by this app work.
 - [How to set up Git](how-to-set-up-git.md) — repository/credential setup.
 - [How to write TODO files](how-to-write-todo-files.md) — format used by `.agent/todos/`.
+- [json-server client guide](json-server-client.md) — TODO-04 Task 2 deep-dive
+  (endpoints, §2.4 payloads, failure model, curl wire-shape exercise).
 - Target architecture of the completed API (status block marks the parts
   already implemented): [`.agent/project-info/architecture.md`](../.agent/project-info/architecture.md).

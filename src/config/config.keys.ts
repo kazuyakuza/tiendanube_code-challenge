@@ -14,9 +14,12 @@
  * bootstrap (TODO-02 §3, implemented, per plan addendum A3-R); ApiKey →
  * global ApiKeyGuard (§5, T5, implemented — `src/common/guards/api-key.guard.ts`,
  * registered via `APP_GUARD` in `app.module.ts`); NumeratorApiUrl /
- * JsonServerUrl → external-service clients (later TODOs).
- * TransactionsReturnBody → transactions controller (TODO-04; plumbing only
- * as of TODO-03 §2.4).
+ * MaxRetries / NumeratorBaseBackoffMs → NumeratorService (TODO-04 Task 1,
+ * implemented — `src/numerator/numerator.service.ts`; URL via `getOrThrow`,
+ * optional knobs via `get(key, default)`); JsonServerUrl → JsonServerService
+ * (TODO-04 Task 2, implemented — `src/json-server/json-server.service.ts`;
+ * URL via `getOrThrow`). TransactionsReturnBody → transactions controller
+ * (TODO-04; plumbing only as of TODO-03 §2.4).
  */
 export const ConfigKeys = {
   NodeEnv: 'NODE_ENV',
@@ -27,6 +30,8 @@ export const ConfigKeys = {
   SwaggerEnabled: 'SWAGGER_ENABLED',
   CorsOrigins: 'CORS_ORIGINS',
   TransactionsReturnBody: 'TRANSACTIONS_RETURN_BODY',
+  MaxRetries: 'MAX_RETRIES',
+  NumeratorBaseBackoffMs: 'NUMERATOR_BASE_BACKOFF_MS',
 } as const;
 
 /** Union of the valid key literals; use it to type key parameters/maps. */

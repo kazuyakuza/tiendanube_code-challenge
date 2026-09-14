@@ -1,8 +1,12 @@
 # Architecture — Orchestration API (PLANNED)
 
-> STATUS: **Planned, not yet implemented.** `src/` is empty. This document
-> describes the target design that follows `brief.md` §6. Update after
-> implementation.
+> STATUS: **core layers implemented — see the dated updates below**
+> (through the 2026-09-14 Task 3 entry). This document originally described
+> the target design that follows `brief.md` §6; its "src/ is empty" framing
+> is superseded — `config/`, `common/` (guards/decorators/enums/constants/
+> utils), `health/`, `transactions/dto/` (contract-only), `numerator/` and
+> `json-server/` now exist — while the remaining sections stand as target
+> design until their dated entries land. Update after implementation.
 >
 > 2026-09-13 update (TODO-02 T1): §1-level project-root configs
 > (`package.json`, tsconfig/eslint/jest, `nest-cli.json`, `.env.example`) plus
@@ -90,6 +94,85 @@
 > (§2.4) has validated plumbing (env schema + `ConfigKeys` +
 > `.env.example`), no runtime consumer until the TODO-04 controller.
 > Details: `docs/app-setup.md` ("DTO & validation layer").
+>
+> 2026-09-13 update (TODO-04 Task 1): the `numerator/` block is now
+> **implemented** — `src/numerator/` ships `NumeratorService.getNextId()`
+> (bounded CAS retry loop: every attempt re-reads the current value via
+> `GET /numerator`; ONLY genuine conflicts retry — HTTP 400 whose body
+> carries a numeric `currentNumerator`, global plan G5; light exponential
+> backoff, 20 ms base capped at 160 ms; domain errors
+> `NumeratorUnavailableError` / `NumeratorRetriesExhaustedError` /
+> `InvalidNumeratorValueError`), plus `numerator.constants.ts`, `errors/`,
+> `interfaces/` and a minimal `NumeratorModule` (decision T1-D1).
+> `NUMERATOR_API_URL` has its first consumer; the optional
+> `MAX_RETRIES` / `NUMERATOR_BASE_BACKOFF_MS` knobs are validated with
+> in-code defaults. **Still pending (Tasks 2–3):** `json-server/` does not
+> exist, `NumeratorModule` is NOT yet imported in `AppModule`, and the
+> `HttpModule` import is bare — Task 3 registers both modules and upgrades
+> to the timeout-configured `HttpModule.register` form (there is NO
+> `forRoot` in `@nestjs/axios` v4 — decision T1-D7); until then the running
+> app performs **zero outbound HTTP calls**. *(2026-09-14 supersessions: the
+> Task 2 update below implements the `json-server/` block, and the Task 3
+> update below registers both modules with the timeout-configured
+> `HttpModule.register` import — this entry's "Still pending (Tasks 2–3)",
+> bare-`HttpModule` and not-yet-imported statements are stale. The app still
+> performs zero outbound HTTP calls today, but because NO orchestration/
+> endpoint calls the clients, which now DO boot.)* The "Concurrency Strategy"
+> section below was reconciled to the implemented numbers per decision
+> T1-D6 (TODO governs: 10 attempts / 20 ms base / domain error classes —
+> the original 5 / 50 ms / direct-503 draft is superseded; HTTP mapping is
+> the orchestration TODO's job, global plan G18). Details:
+> `docs/app-setup.md` ("External clients (TODO-04)").
+>
+> 2026-09-14 update (TODO-04 Task 2): the `json-server/` block is now
+> **implemented** — `src/json-server/` ships `JsonServerService`'s
+> `createTransaction` / `createReceivable` (TODO §2.1–§2.3: `@nestjs/axios`
+> POSTs to `{JSON_SERVER_URL}/transactions` and `/receivables`, returning
+> the echoed resource body; json-server's 201 is NOT asserted — any
+> resolved response succeeds, decision T2-D3) under a **transport-only
+> contract** (§2.4): ids, masked card numbers, fee percentages, totals and
+> `create_date` are caller-supplied and never computed or defaulted here.
+> Failure model: fail-fast (a json-server retry policy is explicitly out of
+> scope — TODO §Out of scope), one domain error
+> `JsonServerRequestError` carrying `resource` + `status` + payload-free
+> `reason`, where `status: number | undefined` is `undefined` on
+> network/timeout/non-axios failures; neither messages nor logs ever
+> include payloads or upstream bodies (card-data privacy, §Configuration &
+> resilience; decision T2-D7). The base URL is `JSON_SERVER_URL` via
+> `ConfigService.getOrThrow` read at construction, trailing slashes
+> normalized once (decision T2-D1) — **no new env key**. Interfaces for the
+> two §2.4 transport payloads plus 2-params-rule param objects (G10), the
+> two resource-path constants, and a minimal `JsonServerModule` importing
+> the **bare `HttpModule`** await registration: **still pending (Task 3)**
+> — `HttpModule.register({ timeout })` + `AppModule` import both clients
+> (G12/G14, T1-D7), and neither service instance boots until then. *(State
+> superseded by the 2026-09-14 Task 3 update below: both modules now import
+> `HttpModule.register({ timeout: HTTP_TIMEOUT_MS })` and are registered in
+> `AppModule`; services construct at boot, while outbound HTTP stays at zero
+> for lack of any calling endpoint.)* Steps
+> 3–7 of "Request Data Flow" below remain target design (orchestration,
+> controllers, fees, masking, tests are later TODOs). Details:
+> `docs/json-server-client.md` + `docs/app-setup.md` ("External clients
+> (TODO-04)").
+>
+> 2026-09-14 update (TODO-04 Task 3 — module registration): **both client
+> modules are now registered in `AppModule`** (`NumeratorModule` +
+> `JsonServerModule`, G14), each importing
+> `HttpModule.register({ timeout: HTTP_TIMEOUT_MS })` — the shared constant
+> `HTTP_TIMEOUT_MS = 4000` lives in
+> `src/common/constants/http-timeout.constants.ts` (G12; v4 has no `forRoot`
+> — decisions T1-D7/T3-D1, so the config lives in the feature modules, not a
+> root registration). `register` gives **each module its own isolated,
+> pre-configured axios instance** (T3-D2): the two clients never share one
+> global instance. Both services export and now construct at boot (config
+> reads only) and are injectable app-wide — the TODO's closing guidance ("a
+> developer can inject `NumeratorService` / `JsonServerService` into any
+> other service") is satisfied; the future Transactions module just adds the
+> module to its own `imports`. Still **NOT** implemented: controller /
+> orchestration endpoint, fee calculation, masking call-site and tests — the
+> running app therefore still performs zero outbound HTTP calls. Details:
+> `docs/app-setup.md` ("External clients (TODO-04)" → "Wiring status") +
+> commit `7a4a149`.
 
 ## Modular NestJS Layout (target)
 
@@ -100,7 +183,7 @@ src/
 │   └── env.validation.ts   # class-validator schema + fail-fast validateEnv()
 ├── common/                 # Cross-cutting concerns (guards/decorators implemented, T5; enums/constants/utils implemented, TODO-03)
 │   ├── api-key.constants.ts # API_KEY_HEADER + Swagger scheme name (implemented, T5)
-│   ├── constants/          # payment-fee.constants.ts — fee percent strings "2"/"4" (implemented, TODO-03)
+│   ├── constants/          # payment-fee.constants.ts — fee percent strings "2"/"4" (implemented, TODO-03) + http-timeout.constants.ts — shared `HTTP_TIMEOUT_MS = 4000` for both client modules (implemented, TODO-04 Task 3)
 │   ├── decorators/         # public.decorator.ts — @Public() + IS_PUBLIC_KEY (implemented, T5)
 │   ├── enums/              # payment-method.enum.ts + receivable-status.enum.ts — string wire values (implemented, TODO-03)
 │   ├── guards/             # api-key.guard.ts — global ApiKeyGuard, exact x-api-key match, 401 on missing/wrong (implemented, T5; registered via APP_GUARD from @nestjs/core)
@@ -113,8 +196,8 @@ src/
 │   ├── transactions.controller.ts # planned (TODO-04)
 │   ├── transactions.service.ts    # planned (TODO-04; first caller of maskCardNumber + fee constants)
 │   └── fee-rules.ts        # debit/credit fee map + date/status policy — planned; percentages in common/constants/ meanwhile
-├── numerator/              # Numerator API client + CAS retry logic
-├── json-server/            # json-server HTTP client (transactions/receivables)
+├── numerator/              # Numerator API client + CAS retry logic — IMPLEMENTED, TODO-04 Task 1 (getNextId; constants/errors/interfaces) — module uses per-module HttpModule.register({ timeout }) and IS registered in app.module.ts (Task 3)
+├── json-server/            # json-server persistence client — IMPLEMENTED, TODO-04 Task 2 (createTransaction/createReceivable transport-only POSTs; constants/errors/interfaces) — module uses per-module HttpModule.register({ timeout }) and IS registered in app.module.ts (Task 3)
 ├── main.ts                 # Bootstrap: helmet, CORS, morgan, versioning, Swagger (API-Key scheme since T5)
 └── app.module.ts           # Wires all modules + global APP_GUARD (ApiKeyGuard, T5)
 ```
@@ -142,13 +225,34 @@ src/
   Request body `{ "oldValue": N, "newValue": N+1 }`.
   - Success → returns `newValue`; caller owns ID `newValue`.
   - Failure → HTTP 400 with `{ "error", "currentNumerator" }`; caller retries
-    from `currentNumerator`.
+    from `currentNumerator`. *(2026-09-13 update, TODO-04 Task 1: the client
+    instead re-reads `GET /numerator` each attempt — the body value is
+    logging-only; see the as-implemented revision below.)*
 - **Algorithm** (per requested ID):
   1. `GET /numerator` → current value N (also returned in the 400 body).
   2. `PUT /numerator/test-and-set { oldValue: N, newValue: N + 1 }`.
   3. On 400: set `N = body.currentNumerator`, retry step 2.
   4. Max attempts (e.g. 5) with short exponential backoff (e.g. 50ms base);
      exhaust → 503 structured error.
+- **As-implemented revision (2026-09-13 update, TODO-04 Task 1 — plan
+  decision T1-D6, supersedes steps 1/3/4 above as the original planning
+  text)**:
+  1. Every attempt RE-READS the current value via `GET /numerator`; the 400
+     body's `currentNumerator` is used for logging only, never to skip the
+     GET (global-plan G6).
+  2. Only a GENUINE CAS conflict retries: HTTP 400 whose body carries a
+     numeric `currentNumerator` (global-plan G5 discriminator — the mock's
+     invalid-params 400 has no such field and must NOT retry).
+  3. Budget: `MAX_RETRIES` total attempts, default **10** (not 5). Backoff
+     `min(NUMERATOR_BASE_BACKOFF_MS × 2^retryIndex, 160 ms)` with base
+     default **20 ms** (not 50 ms); no sleep after the final conflict.
+  4. Failures surface as DOMAIN ERROR CLASSES, not HTTP statuses: exhausted
+     budget → `NumeratorRetriesExhaustedError`; network/timeout/5xx/
+     unexpected 400 → `NumeratorUnavailableError`; non-finite value or
+     unsafe candidate → `InvalidNumeratorValueError`. Mapping to HTTP (e.g.
+     **503**) belongs to the orchestration TODO (global-plan G18) — the
+     "503 structured error" phrase in step 4 above and in "Error & Response
+     Conventions" is target design, not client behavior.
 - **Both IDs before insert**: the service reserves ID-A and ID-B first; if the
   second reservation fails, NO insert happens (no orphans).
 - **Numeric → string**: json-server requires string ids; convert `newValue`
