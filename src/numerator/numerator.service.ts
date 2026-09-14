@@ -1,5 +1,7 @@
 /**
- * Numerator API client (TODO-04 §Task 1).
+ * Numerator API client (TODO-04 §Task 1). The upstream mock lives in
+ * `numerator-api/api.js` (+ `numerator-api/numerator.js` for state semantics);
+ * runbook + curl contract exercises: `docs/app-setup.md` (External clients).
  *
  * Generates unique sequential IDs through the mock's atomic CAS endpoint
  * (`PUT /numerator/test-and-set`) with a bounded retry loop: every attempt

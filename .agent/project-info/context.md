@@ -4,18 +4,55 @@
 
 ## Current Work Focus
 
-**TODO-03 COMPLETE.** Merged `feat/transaction-dtos` into `main` and pushed
-to `origin` (step 5 of the Critical Workflow, 2026-09-14). The contract
-layer for `POST /v1/transactions` — request/response DTOs, two custom
-validators, shared enums, fee-percent constants, `maskCardNumber` and
-`TRANSACTIONS_RETURN_BODY` plumbing — now lives on `main`. Deliberately
-contract-only per TODO §6: no module/controller/service — the endpoint
-**still 404s**, Swagger `/docs` still shows only the health probe, and the
-env flag has no runtime consumer until TODO-04. TODO-02 was closed earlier
-(merged to `main` at `d5abceb`, pushed). No active workflow task remains
-from TODO-03.
+**TODO-04 IN PROGRESS** — external clients (Numerator API + json-server), on
+branch `feat/external-clients` (v `0.3.0`). **Task 1 — Numerator client —**
+**implemented and documented** (4.2 commits fa9f723 / c18eda4 / b36b53c /
+d56eab3; 4.3 review: no fixes; 4.3 simplification: none; 4.4 docs: this cycle).
+`src/numerator/` ships `NumeratorService.getNextId()` — CAS retry loop with
+10 total attempts by default, retries ONLY genuine conflicts, 20 ms-base /
+160 ms-capped backoff, domain error classes — alongside a minimal
+`NumeratorModule`. The app still performs **no outbound HTTP at runtime**:
+`NumeratorModule` is not yet imported in `AppModule` and the `HttpModule`
+timeout config awaits **Task 3** (which must use `HttpModule.register` —
+`@nestjs/axios` v4 has no `forRoot`; decision T1-D7); **Task 2**
+(json-server client) is not started. Remaining Task 1 steps: 4.5b
+plan-adherence (architector) and 4.6 `[DONE]` mark on §Task 1 of
+`20260913-todo-4.md` (file stays untracked per G19). TODO-03 and TODO-02
+were closed earlier (both merged to `main` and pushed).
 
 ## Recent Changes
+
+- 2026-09-13: TODO-04 cycle Task 1 — Numerator client (branch
+  `feat/external-clients`; 4.2 commits fa9f723 config knobs, c18eda4 constants
+  /errors/interfaces, b36b53c service + module, d56eab3 structure map).
+  New `src/numerator/`: `numerator.service.ts` (`getNextId(): Promise<string>`
+  per TODO §1.3 — re-`GET` current value every attempt, validate finite
+  number + safe-integer candidate, `PUT test-and-set { oldValue, newValue }`,
+  retry ONLY genuine conflict (HTTP 400 + numeric `currentNumerator`, plan
+  G5; invalid-params 400 fails fast), backoff `min(base × 2^idx, 160 ms)`,
+  conflict warn-logs attempt/current/candidate), `numerator.module.ts`
+  (minimal, bare `HttpModule` — T1-D1), `numerator.constants.ts` (single
+  source for defaults 10/20/160/400 — T1-D5), `errors/numerator.errors.ts`
+  (`NumeratorUnavailableError` / `NumeratorRetriesExhaustedError` /
+  `InvalidNumeratorValueError`), `interfaces/` (mock wire shapes +
+  2-params-rule param objects). Config: OPTIONAL env `MAX_RETRIES` (default
+  10) + `NUMERATOR_BASE_BACKOFF_MS` (default 20) validated in
+  `env.validation.ts`, `ConfigKeys.MaxRetries` / `NumeratorBaseBackoffMs`,
+  commented `.env.example` entries; `NUMERATOR_API_URL` gained its first
+  consumer (`getOrThrow` in the service constructor). 4.3: review = NO
+  fixes, simplification = NONE. Deviations/decisions T1-D1…T1-D8 per
+  plan §5 (T1-D3 structure map pulled into Task 1; T1-D4 standalone
+  `isAxiosError` (axios 1.20); T1-D6 architecture reconciliation — landed
+  in 4.4; T1-D7 `HttpModule.register` not `forRoot` (v4) — Task 3 input;
+  T1-D8 strictNullChecks-safe narrowing). 4.4 docs: JSDoc polish (service
+  header mock-source/runbook links; failure-context §refs); `docs/app-setup.md`
+  new "External clients (TODO-04)" section (semantics, config flow, curl
+  contract exercises transcribed from `numerator-api/api.js` — NOT
+  live-verified, services may be down, docker runs only via user), env-table
+  rows, status sweeps on "app does not call services yet" wording;
+  `architecture.md` T1-D6 revision + cycle entry + tree markers; `tech.md`
+  two env rows. Task 2/Task 3 documented strictly as PENDING. 4.5b/4.6 were
+  still open when this bullet was written.
 
 - 2026-09-13: TODO-03 cycle TD — transaction DTO & validation contract
   layer (branch `feat/transaction-dtos`; 4.2 commits e73ed43 enums,
@@ -118,6 +155,7 @@ from TODO-03.
 
 - TODO-03 is complete: all tasks `[DONE]`, merged to `main`, pushed to
   `origin`. Feature branch `feat/transaction-dtos` deleted post-merge.
+  (TODO-02 likewise closed earlier — merged to `main` at `d5abceb`, pushed.)
 - Flagged user-owned accepted deviations: (a) `30001` in
   `health.controller.ts` curl JSDoc — pre-existing user typo, not workflow
   scope; (b) `docker:*` scripts in `package.json` — pre-existing user
@@ -137,14 +175,26 @@ from TODO-03.
 
 ## Immediate Next Steps
 
-1. TODO-04 (`20260913-todo-4.md`): transactions module/controller/service —
-   makes `POST /v1/transactions` reachable (the TODO-03 DTO contract then
-   answers **400** on invalid payloads via the global `ValidationPipe` and
-   renders in Swagger `/docs`), wires the Numerator CAS + json-server clients,
-   ID generation, fee math, masking on the write path, and becomes the first
-   runtime consumer of `TRANSACTIONS_RETURN_BODY`.
-2. TODO-05 (`20260913-todo-5.md`): exists untracked — user-owned, not yet
-   integrated into any workflow.
+1. **Continue TODO-04** (`20260913-todo-4.md` — external clients; note: NOT
+   the transactions-orchestration file its controllers/fees are explicitly
+   out of scope there; pointer corrected from the stale pre-cycle wording
+   of this list): finish Task 1 with 4.5b adherence + 4.6 `[DONE]`, then
+   **Task 2 — json-server client** (`createTransaction` /
+   `createReceivable`, transport-only payloads, fail-fast on 4xx/5xx) and
+   **Task 3 — module registration** (both modules into `AppModule`;
+   `HttpModule.register({ timeout: HTTP_TIMEOUT_MS })` per T1-D7/G12;
+   structure map per G15) with their full 4.x cycles.
+2. Step 5: close TODO-04 — rename `20260913-todo-4.md` with the `-DONE`
+   suffix in the working tree ONLY (file is untracked/user-owned per G19),
+   merge `feat/external-clients` → `main`, push to `origin` only.
+3. Later transactions-orchestration module — makes `POST /v1/transactions`
+   reachable (the TODO-03 DTO contract then answers **400** on invalid
+   payloads via the global `ValidationPipe` and renders in Swagger `/docs`),
+   wires both clients (two IDs reserved before any write), fee math,
+   masking on the write path, maps the clients' domain errors to HTTP
+   responses (global plan G18) and becomes the first runtime consumer of
+   `TRANSACTIONS_RETURN_BODY`. TODO-05 (`20260913-todo-5.md`) exists
+   untracked — user-owned, not yet integrated into any workflow.
 
 Both `.agent/todos/20260913/20260913-todo-4.md` and
 `.agent/todos/20260913/20260913-todo-5.md` are **UNTRACKED** user-owned

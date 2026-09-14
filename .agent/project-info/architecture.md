@@ -90,6 +90,29 @@
 > (§2.4) has validated plumbing (env schema + `ConfigKeys` +
 > `.env.example`), no runtime consumer until the TODO-04 controller.
 > Details: `docs/app-setup.md` ("DTO & validation layer").
+>
+> 2026-09-13 update (TODO-04 Task 1): the `numerator/` block is now
+> **implemented** — `src/numerator/` ships `NumeratorService.getNextId()`
+> (bounded CAS retry loop: every attempt re-reads the current value via
+> `GET /numerator`; ONLY genuine conflicts retry — HTTP 400 whose body
+> carries a numeric `currentNumerator`, global plan G5; light exponential
+> backoff, 20 ms base capped at 160 ms; domain errors
+> `NumeratorUnavailableError` / `NumeratorRetriesExhaustedError` /
+> `InvalidNumeratorValueError`), plus `numerator.constants.ts`, `errors/`,
+> `interfaces/` and a minimal `NumeratorModule` (decision T1-D1).
+> `NUMERATOR_API_URL` has its first consumer; the optional
+> `MAX_RETRIES` / `NUMERATOR_BASE_BACKOFF_MS` knobs are validated with
+> in-code defaults. **Still pending (Tasks 2–3):** `json-server/` does not
+> exist, `NumeratorModule` is NOT yet imported in `AppModule`, and the
+> `HttpModule` import is bare — Task 3 registers both modules and upgrades
+> to the timeout-configured `HttpModule.register` form (there is NO
+> `forRoot` in `@nestjs/axios` v4 — decision T1-D7); until then the running
+> app performs **zero outbound HTTP calls**. The "Concurrency Strategy"
+> section below was reconciled to the implemented numbers per decision
+> T1-D6 (TODO governs: 10 attempts / 20 ms base / domain error classes —
+> the original 5 / 50 ms / direct-503 draft is superseded; HTTP mapping is
+> the orchestration TODO's job, global plan G18). Details:
+> `docs/app-setup.md` ("External clients (TODO-04)").
 
 ## Modular NestJS Layout (target)
 
@@ -113,8 +136,8 @@ src/
 │   ├── transactions.controller.ts # planned (TODO-04)
 │   ├── transactions.service.ts    # planned (TODO-04; first caller of maskCardNumber + fee constants)
 │   └── fee-rules.ts        # debit/credit fee map + date/status policy — planned; percentages in common/constants/ meanwhile
-├── numerator/              # Numerator API client + CAS retry logic
-├── json-server/            # json-server HTTP client (transactions/receivables)
+├── numerator/              # Numerator API client + CAS retry logic — IMPLEMENTED, TODO-04 Task 1 (getNextId; constants/errors/interfaces + minimal module — NOT yet imported by app.module.ts, Task 3)
+├── json-server/            # json-server HTTP client (transactions/receivables) — planned (TODO-04 Task 2)
 ├── main.ts                 # Bootstrap: helmet, CORS, morgan, versioning, Swagger (API-Key scheme since T5)
 └── app.module.ts           # Wires all modules + global APP_GUARD (ApiKeyGuard, T5)
 ```
@@ -142,13 +165,34 @@ src/
   Request body `{ "oldValue": N, "newValue": N+1 }`.
   - Success → returns `newValue`; caller owns ID `newValue`.
   - Failure → HTTP 400 with `{ "error", "currentNumerator" }`; caller retries
-    from `currentNumerator`.
+    from `currentNumerator`. *(2026-09-13 update, TODO-04 Task 1: the client
+    instead re-reads `GET /numerator` each attempt — the body value is
+    logging-only; see the as-implemented revision below.)*
 - **Algorithm** (per requested ID):
   1. `GET /numerator` → current value N (also returned in the 400 body).
   2. `PUT /numerator/test-and-set { oldValue: N, newValue: N + 1 }`.
   3. On 400: set `N = body.currentNumerator`, retry step 2.
   4. Max attempts (e.g. 5) with short exponential backoff (e.g. 50ms base);
      exhaust → 503 structured error.
+- **As-implemented revision (2026-09-13 update, TODO-04 Task 1 — plan
+  decision T1-D6, supersedes steps 1/3/4 above as the original planning
+  text)**:
+  1. Every attempt RE-READS the current value via `GET /numerator`; the 400
+     body's `currentNumerator` is used for logging only, never to skip the
+     GET (global-plan G6).
+  2. Only a GENUINE CAS conflict retries: HTTP 400 whose body carries a
+     numeric `currentNumerator` (global-plan G5 discriminator — the mock's
+     invalid-params 400 has no such field and must NOT retry).
+  3. Budget: `MAX_RETRIES` total attempts, default **10** (not 5). Backoff
+     `min(NUMERATOR_BASE_BACKOFF_MS × 2^retryIndex, 160 ms)` with base
+     default **20 ms** (not 50 ms); no sleep after the final conflict.
+  4. Failures surface as DOMAIN ERROR CLASSES, not HTTP statuses: exhausted
+     budget → `NumeratorRetriesExhaustedError`; network/timeout/5xx/
+     unexpected 400 → `NumeratorUnavailableError`; non-finite value or
+     unsafe candidate → `InvalidNumeratorValueError`. Mapping to HTTP (e.g.
+     **503**) belongs to the orchestration TODO (global-plan G18) — the
+     "503 structured error" phrase in step 4 above and in "Error & Response
+     Conventions" is target design, not client behavior.
 - **Both IDs before insert**: the service reserves ID-A and ID-B first; if the
   second reservation fails, NO insert happens (no orphans).
 - **Numeric → string**: json-server requires string ids; convert `newValue`

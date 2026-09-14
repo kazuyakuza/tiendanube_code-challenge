@@ -36,6 +36,8 @@
 | `JSON_SERVER_URL`   | json-server base URL           | `http://localhost:8080`  |
 | `API_KEY`           | Key for `x-api-key` guard      | (local secret)           |
 | `NODE_ENV`          | Environment name               | `development`            |
+| `MAX_RETRIES`       | Optional; total CAS attempts per `NumeratorService.getNextId()` (default 10) | `10` |
+| `NUMERATOR_BASE_BACKOFF_MS` | Optional; conflict-retry backoff base in ms, `min(base × 2^idx, 160)` (default 20) | `20` |
 
 `.env` files are gitignored (see `.gitignore`); never commit secrets.
 
