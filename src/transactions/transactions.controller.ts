@@ -20,10 +20,12 @@
  *
  * Error behaviour: domain errors (`NumeratorUnavailableError`,
  * `NumeratorRetriesExhaustedError`, `InvalidNumeratorValueError`,
- * `JsonServerRequestError`) propagate RAW from the service — the documented
- * 502/503 responses are produced once the Cycle-B global exception filter
- * (global plan G4) lands; until then they surface as the NestJS default 500.
- * The Swagger annotations below already document the target contract.
+ * `JsonServerRequestError`) are mapped by the global `AllExceptionsFilter`
+ * (APP_FILTER, global plan G4): Numerator failures → 503, json-server
+ * unknown/5xx → 503, json-server 4xx → 502; everything else → the
+ * structured `{ statusCode, message, error }` body. A receivable failure
+ * after the transaction was persisted also triggers compensation
+ * (`TransactionCompensationService`), then the original error is mapped.
  *
  * Versioning (CA-D1): no `version` metadata — the global `defaultVersion: '1'`
  * (`main.ts` URI versioning) mounts this at `/v1/transactions`. Contrast:
@@ -67,9 +69,9 @@ export class TransactionsController {
   })
   @ApiBadRequestResponse({ description: 'Payload failed DTO validation.' })
   @ApiUnauthorizedResponse({ description: 'Missing or invalid x-api-key header.' })
-  @ApiServiceUnavailableResponse({ description: 'Numerator or json-server unreachable (mapping lands with the Cycle-B exception filter).' })
-  @ApiBadGatewayResponse({ description: 'json-server returned an unexpected 4xx (mapping lands with the Cycle-B exception filter).' })
-  @ApiInternalServerErrorResponse({ description: 'Unexpected internal error (mapping lands with the Cycle-B exception filter).' })
+  @ApiServiceUnavailableResponse({ description: 'Numerator or json-server unreachable (upstream 5xx or network failure).' })
+  @ApiBadGatewayResponse({ description: 'json-server returned an unexpected 4xx.' })
+  @ApiInternalServerErrorResponse({ description: 'Unexpected internal error.' })
   async create(
     @Body() createTransactionDto: CreateTransactionDto,
   ): Promise<CreateTransactionResponseDto | undefined> {
