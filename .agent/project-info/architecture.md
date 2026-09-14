@@ -1,10 +1,12 @@
 # Architecture — Orchestration API (PLANNED)
 
 > STATUS: **core layers implemented — see the dated updates below**
-> (through the 2026-09-14 Task 3 entry). This document originally described
+> (through the 2026-09-14 TODO-05 entry — service-layer transaction
+> orchestration; controller still planned). This document originally described
 > the target design that follows `brief.md` §6; its "src/ is empty" framing
 > is superseded — `config/`, `common/` (guards/decorators/enums/constants/
-> utils), `health/`, `transactions/dto/` (contract-only), `numerator/` and
+> utils), `health/`, `transactions/dto/` + the `transactions/` module/service/
+> fee-rules trio (TODO-05, **no controller yet**), `numerator/` and
 > `json-server/` now exist — while the remaining sections stand as target
 > design until their dated entries land. Update after implementation.
 >
@@ -93,6 +95,10 @@
 > classes exist but nothing executes them. `TRANSACTIONS_RETURN_BODY`
 > (§2.4) has validated plumbing (env schema + `ConfigKeys` +
 > `.env.example`), no runtime consumer until the TODO-04 controller.
+> *(2026-09-14 supersessions per the TODO-05 entry below: the module/service
+> + `fee-rules.ts` now **exist**, and `TRANSACTIONS_RETURN_BODY`'s first
+> runtime consumer is `TransactionsService`; the endpoint/controller — and
+> thus any HTTP-observable gate effect — remain pending a later TODO). *
 > Details: `docs/app-setup.md` ("DTO & validation layer").
 >
 > 2026-09-13 update (TODO-04 Task 1): the `numerator/` block is now
@@ -116,12 +122,14 @@
 > update below registers both modules with the timeout-configured
 > `HttpModule.register` import — this entry's "Still pending (Tasks 2–3)",
 > bare-`HttpModule` and not-yet-imported statements are stale. The app still
-> performs zero outbound HTTP calls today, but because NO orchestration/
-> endpoint calls the clients, which now DO boot.)* The "Concurrency Strategy"
+> performs zero outbound HTTP calls today, but because nothing ever reaches
+> the orchestration code that would call the clients (the clients themselves
+> DO boot — since 2026-09-14 TODO-05 that caller exists as `TransactionsService`).)* The "Concurrency Strategy"
 > section below was reconciled to the implemented numbers per decision
 > T1-D6 (TODO governs: 10 attempts / 20 ms base / domain error classes —
 > the original 5 / 50 ms / direct-503 draft is superseded; HTTP mapping is
-> the orchestration TODO's job, global plan G18). Details:
+> the pending **controller** TODO's job, global plan G18 —
+> `TransactionsService` (TODO-05) deliberately propagates these errors raw). Details:
 > `docs/app-setup.md` ("External clients (TODO-04)").
 >
 > 2026-09-14 update (TODO-04 Task 2): the `json-server/` block is now
@@ -151,7 +159,9 @@
 > `AppModule`; services construct at boot, while outbound HTTP stays at zero
 > for lack of any calling endpoint.)* Steps
 > 3–7 of "Request Data Flow" below remain target design (orchestration,
-> controllers, fees, masking, tests are later TODOs). Details:
+> controllers, fees, masking, tests are later TODOs). *(Partially superseded
+> by the 2026-09-14 TODO-05 update below: steps 3–6 are now implemented AT
+> THE SERVICE LAYER — still uninvoked until a controller exists.)* Details:
 > `docs/json-server-client.md` + `docs/app-setup.md` ("External clients
 > (TODO-04)").
 >
@@ -167,12 +177,57 @@
 > global instance. Both services export and now construct at boot (config
 > reads only) and are injectable app-wide — the TODO's closing guidance ("a
 > developer can inject `NumeratorService` / `JsonServerService` into any
-> other service") is satisfied; the future Transactions module just adds the
-> module to its own `imports`. Still **NOT** implemented: controller /
-> orchestration endpoint, fee calculation, masking call-site and tests — the
-> running app therefore still performs zero outbound HTTP calls. Details:
+> other service") is satisfied; the (now existing, since TODO-05 below)
+> Transactions module adds the modules to its own `imports`. What this
+> entry still excluded — controller, endpoint, fee calculation and masking
+> call-site — has since partially landed: the service + fee + masking are
+> implemented (see TODO-05 update below); the **controller/endpoint and tests
+> are still not implemented**, so the running app still performs zero outbound
+> HTTP calls. Details:
 > `docs/app-setup.md` ("External clients (TODO-04)" → "Wiring status") +
 > commit `7a4a149`.
+>
+> 2026-09-14 update (TODO-05 — transaction orchestration service): the first
+> business layer is **implemented as a service only** — no controller, no
+> endpoint, no route (TODO §Out of scope; user-ratified). Three new files in
+> `src/transactions/` + the `AppModule` import + `app.module.ts` header-JSDoc
+> refresh: `fee-rules.ts` (pure: `resolveReceivableStatus`, `computeTotal`,
+> `formatDateDDMMYYYY`), `transactions.service.ts` (`TransactionsService.create(dto)` —
+> the strict 9-step flow: two `getNextId()` reservations before any write
+> (zero orphans), masking on the write path via `maskCardNumber`, fee data
+> (discount = fee-% string from `PAYMENT_FEE_PERCENTAGES`; status =
+> `paid`/`waiting_funds`; `total` = integer-cents math **truncated** to 2
+> decimals `floor(cents × remaining% / 100)` — worked examples incl.
+> `"10.01"`@4→`"9.60"`, `"0.01"`@2→`"0.00"`; strict transaction→receivable
+> persistence order; envelope-or-`undefined` return gated by
+> `ConfigKeys.TransactionsReturnBody` via `get(key, true)`; **zero try/catch**
+> — Numerator domain errors / `JsonServerRequestError` propagate raw, a
+> failed second write ⇒ accepted partial state — TODO §Error), and
+> `transactions.module.ts` (imports the two registered client modules,
+> provides + exports the service, **no controller**). **Payment ruling (user,
+> Option B, 2026-09-14): there is NO `payment_date` field and NO D+30
+> date math anywhere** — D+0/D+30 settlement is carried purely by `status`,
+> `create_date` = local now `DD/MM/YYYY` (supersedes TODO §Fee's payment-date
+> phrasing; impl plan §8 D1). Steps 3–6 of "Request Data Flow" below are thus
+> **implemented at the service layer — still uninvoked** (no HTTP path); step
+> 7's 201 stays with the controller TODO. **First consumers activated at the
+> service layer only:** `maskCardNumber` (was uncalled since TODO-03),
+> `PAYMENT_FEE_PERCENTAGES` and the shared enums via `fee-rules.ts`, and
+> `TRANSACTIONS_RETURN_BODY` (was §2.4 plumbing-only since TODO-03) — while
+> externally the app is STILL health-only routes/404s with zero outbound HTTP
+> (verification = build+lint exit 0; no tests, no live traffic — the route
+> must not be assumed until the controller TODO wires it). **Workflow notes:**
+> the five `## Task` sections + wiring ran as **ONE merged 4.1–4.6 cycle**
+> (inseparable facets of the single `TransactionsService.create` deliverable
+> — workflow's "extremely short/related" clause, user-ratified, not five
+> independent expansions); **T5-G13 froze the client/transport interfaces —
+> zero edits under `src/json-server/`/`src/numerator/` and DTO field shapes
+> unchanged**; the envelope returns `| undefined` (impl plan §3, T5-G6
+> widening — D3 on the §8 deviation table). The cycle's numbered file handle
+> is `20260913-todo-5.md` → **TODO-05** (its internal "TODO 04" title = the
+> orchestration task; external clients = todo-4 — docs now prefer naming
+> artifacts over numbers). Details: `docs/app-setup.md` ("Transactions
+> orchestration service (TODO-05)") + git `207f79c` `759bb62` `7b2176c`.
 
 ## Modular NestJS Layout (target)
 
@@ -189,13 +244,14 @@ src/
 │   ├── guards/             # api-key.guard.ts — global ApiKeyGuard, exact x-api-key match, 401 on missing/wrong (implemented, T5; registered via APP_GUARD from @nestjs/core)
 │   ├── filters/            # Global exception filter (structured errors) — planned
 │   ├── interceptors/       # Logging/response conventions — planned
-│   └── utils/              # card-number.util.ts — pure maskCardNumber last-4 helper (implemented, TODO-03; no runtime caller until TODO-04)
+│   └── utils/              # card-number.util.ts — pure maskCardNumber last-4 helper (implemented, TODO-03; runtime call-site wired in TODO-05's service — still no HTTP path triggers it)
 ├── health/                 # HEAD /health/ping — public liveness probe (implemented, T4; @Public()-exempt since T5)
-├── transactions/           # Main orchestration module — contract layer only so far (TODO-03)
-│   ├── dto/                # CreateTransactionDto + validators/ + 3 response DTOs incl. { transaction, receivable } envelope (implemented, TODO-03; not reachable from any route yet)
-│   ├── transactions.controller.ts # planned (TODO-04)
-│   ├── transactions.service.ts    # planned (TODO-04; first caller of maskCardNumber + fee constants)
-│   └── fee-rules.ts        # debit/credit fee map + date/status policy — planned; percentages in common/constants/ meanwhile
+├── transactions/           # Main orchestration module — service layer IMPLEMENTED (TODO-05); no controller/route, no tests
+│   ├── dto/                # CreateTransactionDto + validators/ + 3 response DTOs incl. { transaction, receivable } envelope (implemented, TODO-03; consumed by TransactionsService since TODO-05; still not reachable from any route)
+│   ├── transactions.controller.ts # planned — controller TODO (route + Swagger 201/guard wiring + error→HTTP mapping G18 arrive there; NOT this cycle)
+│   ├── transactions.service.ts    # implemented (TODO-05): create() 9-step orchestration; first caller of maskCardNumber + fee constants; injectable + exported by TransactionsModule, never invoked over HTTP yet
+│   ├── transactions.module.ts     # implemented (TODO-05): imports NumeratorModule + JsonServerModule, provides/exports TransactionsService, NO controller; registered in app.module.ts
+│   └── fee-rules.ts        # implemented (TODO-05): pure resolveReceivableStatus/computeTotal/formatDateDDMMYYYY — fee percentages stay in common/constants/ (read via PAYMENT_FEE_PERCENTAGES, never re-declared); NO D+30 add-days math (Option-B ruling)
 ├── numerator/              # Numerator API client + CAS retry logic — IMPLEMENTED, TODO-04 Task 1 (getNextId; constants/errors/interfaces) — module uses per-module HttpModule.register({ timeout }) and IS registered in app.module.ts (Task 3)
 ├── json-server/            # json-server persistence client — IMPLEMENTED, TODO-04 Task 2 (createTransaction/createReceivable transport-only POSTs; constants/errors/interfaces) — module uses per-module HttpModule.register({ timeout }) and IS registered in app.module.ts (Task 3)
 ├── main.ts                 # Bootstrap: helmet, CORS, morgan, versioning, Swagger (API-Key scheme since T5)
@@ -205,19 +261,41 @@ src/
 ## Request Data Flow — POST /v1/transactions
 
 1. **Guard**: `ApiKeyGuard` validates `x-api-key` (health stays public).
+   *Status: implemented since T5, but this step only runs for MATCHED
+   routes — with no business route committed, `POST /v1/transactions`
+   never reaches it (404 first).*
 2. **Validation**: DTO pipes validate payload (value, description, method,
    cardNumber, cardHolderName, cardExpirationDate MM/YY, cardCvv).
-   *Status (TODO-03): partially live — the validation classes exist and
-   compile, but there is **no route yet**, so no request ever reaches them;
-   steps 1–7 run as a flow only once TODO-04 registers the controller.*
+   *Status (TODO-03 classes since TODO-03; TODO-05 updated note): the
+   validation classes exist and compile, but there is **no route yet**, so
+   no request ever reaches them; steps 1–2 run end-to-end only once the
+   controller TODO registers the route (and only then may the `create()`
+   orchestration below be invoked from HTTP).*
 3. **ID reservation**: `NumeratorService` obtains TWO unique IDs via
    `PUT /numerator/test-and-set` BEFORE any write (no orphan records).
+   *Status (TODO-05): **implemented at the service layer** —
+   `TransactionsService` reserves both ids before any `create*` (both before
+   any write — no orphans if the SECOND reservation fails). Still
+   uninvoked: no controller/route exists.*
 4. **Create transaction**: `JsonServerService` POSTs to `json-server/transactions`
    with the first ID; card number masked to last 4 digits.
-5. **Compute receivable**: fee rules → status, payment date, subtotal, discount
-   (percentage string), total.
+   *Status (TODO-05): implemented at service layer — masking now has its
+   runtime call-site (`buildTransactionPayload` → `maskCardNumber`). No HTTP
+   path triggers it yet.*
+5. **Compute receivable**: fee rules → status, subtotal, discount
+   (percentage string), total; `create_date` = local now `DD/MM/YYYY`.
+   *Status (TODO-05): implemented — `resolveReceivableStatus` +
+   `PAYMENT_FEE_PERCENTAGES` + cents-truncate `computeTotal`
+   (`src/transactions/fee-rules.ts`). Payment-date line is superseded per
+   Option B (§dated updates above): NO `payment_date` in the flow.*
 6. **Create receivable**: POST to `json-server/receivables` with the second ID.
-7. **Respond**: 201 with both resources in one consistent body.
+   *Status (TODO-05): implemented at service layer with strict
+   transaction-then-receivable order.*
+7. **Respond**: 201 with both resources in one consistent body (or a bare
+   `201` when `TRANSACTIONS_RETURN_BODY=false`).
+   *Status (TODO-05): **service half implemented only** — `create()`
+   returns the envelope or `undefined` per the gate; the route-level 201
+   behavior arrives with the controller TODO.*
 
 ## Concurrency Strategy for ID Generation
 
@@ -249,10 +327,11 @@ src/
   4. Failures surface as DOMAIN ERROR CLASSES, not HTTP statuses: exhausted
      budget → `NumeratorRetriesExhaustedError`; network/timeout/5xx/
      unexpected 400 → `NumeratorUnavailableError`; non-finite value or
-     unsafe candidate → `InvalidNumeratorValueError`. Mapping to HTTP (e.g.
-     **503**) belongs to the orchestration TODO (global-plan G18) — the
-     "503 structured error" phrase in step 4 above and in "Error & Response
-     Conventions" is target design, not client behavior.
+      unsafe candidate → `InvalidNumeratorValueError`. Mapping to HTTP (e.g.
+      **503**) belongs to the pending controller TODO (global-plan G18) — the
+      service layer (TODO-05) still propagates these raw — so the
+      "503 structured error" phrase in step 4 above and in "Error & Response
+      Conventions" is target design, not client behavior.
 - **Both IDs before insert**: the service reserves ID-A and ID-B first; if the
   second reservation fails, NO insert happens (no orphans).
 - **Numeric → string**: json-server requires string ids; convert `newValue`

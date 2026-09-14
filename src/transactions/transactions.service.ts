@@ -14,6 +14,13 @@
  *
  * Logging (T5-G10): one debug line on success carrying ONLY the two numeric
  * string ids — never the payload (card data) and never amounts.
+ *
+ * AI-agent guidance: this service is INJECTABLE ONLY — no controller/route
+ * calls it yet (controller TODO pending), so `create()` never executes in
+ * the running app and the clients still send zero outbound HTTP. Pure rules
+ * live in `./fee-rules`; see `docs/app-setup.md` → "Transactions
+ * orchestration service (TODO-05)" for the flow, fee examples and how to
+ * exercise it once the controller lands.
  */
 import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';

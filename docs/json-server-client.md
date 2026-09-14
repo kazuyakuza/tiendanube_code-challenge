@@ -12,10 +12,14 @@ import carries the shared timeout via
 axios instance (T3-D2; v4 has no `forRoot` — T1-D7/T3-D1). So today a
 `JsonServerService` instance **is constructed at boot** and is injectable
 app-wide (DI verified by the plan's `DI-SANITY-OK` check recorded in the
-Task 3 adherence evidence). It still performs **zero outbound calls at
-runtime** only because no orchestration endpoint invokes it yet. Unit/e2e
+Task 3 adherence evidence). TODO-05 made it **called by code** —
+`TransactionsService` (`src/transactions/transactions.service.ts`) is its
+first real consumer inside `create()` — yet it still performs **zero
+outbound calls at runtime** because no route invokes that service yet (the
+controller TODO will wire the endpoint). Unit/e2e
 tests for this client are deferred to a later TODO. Parent runbook:
-[`app-setup.md`](app-setup.md) ("External clients (TODO-04)").
+[`app-setup.md`](app-setup.md) ("External clients (TODO-04)" +
+"Transactions orchestration service (TODO-05)").
 
 ## Table of Contents
 
@@ -55,16 +59,20 @@ card numbers; it only transports the data it receives." Concretely:
   (the orchestration layer gets it from `NumeratorService`, §2.2).
 - **No fee math** — `discount` (fee percentage string "2"/"4") and `total`
   arrive pre-computed upstream.
-- **No card masking** — `cardNumber` must already be the last-4 value
-  (produced by `maskCardNumber()`, `src/common/utils/card-number.util.ts`,
-  in the future service layer).
-- **No field defaulting** — even `create_date` is caller-owned
-  (ISO-8601 recommended per §2.4; the seed's DD/MM/YYYY format discrepancy
-  is an upstream business decision, not a client concern).
+- **No card masking** — `cardNumber` must already be the last-4 value,
+  produced by `maskCardNumber()` (`src/common/utils/card-number.util.ts`)
+  in the service — wired since TODO-05
+  (`TransactionsService.buildTransactionPayload`).
+- **No field defaulting** — even `create_date` is caller-owned. Since
+  TODO-05 the actual caller writes `DD/MM/YYYY` via
+  `formatDateDDMMYYYY` (`src/transactions/fee-rules.ts`) to match the seed;
+  §2.4's ISO-8601 recommendation for this field is superseded for that
+  caller (the DTO's Swagger note stays unedited history).
 - **No retries** — every failure aborts immediately (fail-fast; retry
   policy for json-server calls is explicitly out of scope for TODO-04).
 - **No HTTP-response mapping** — translating failures into route responses
-  is the orchestration layer's job (global-plan decision G18).
+  is the controller TODO's job (global-plan decision G18); in the meantime
+  `TransactionsService` propagates client errors raw (TODO-05 §Task 5).
 - **No route** — the service only transports; controllers arrive in later
   TODOs (the module itself has been registered in `AppModule` by TODO-04
   Task 3 — see [Wiring status](#wiring-status--registered-with-timeout)).
@@ -109,7 +117,7 @@ numbers, snake_case receivable fields.
 | `id` | `string` | From the Numerator API (second id of the pair) |
 | `transaction_id` | `string` | Originating transaction id |
 | `status` | `ReceivableStatus` | `paid` (debit, D+0) / `waiting_funds` (credit) — mapped upstream |
-| `create_date` | `string` | Caller-supplied; ISO-8601 recommended per §2.4 |
+| `create_date` | `string` | Caller-supplied; since TODO-05 the first real caller (`TransactionsService`) writes `DD/MM/YYYY` (seed format) — no `payment_date` is ever added (Option-B ruling) |
 | `subtotal` | `string` | Same value as the transaction |
 | `discount` | `string` | Fee **percentage** ("2" debit / "4" credit) — user decision, see `brief.md` §3.2 |
 | `total` | `string` | Net amount — computed upstream |
@@ -171,9 +179,12 @@ module its own isolated axios instance carrying the 4 s timeout
 separate from the Numerator client's instance (T3-D2). `JsonServerService`
 boots with the app and is injectable anywhere (evidence: the Task 3 plan's
 temp DI-sanity script, `DI-SANITY-OK`, recorded in the adherence-report
-step — not a file in the repo). The future Transactions module simply adds
-`JsonServerModule` to its `imports`. With no orchestration endpoint yet,
-nothing calls the service, so the app still sends zero outbound requests.
+step — not a file in the repo). The Transactions module has now landed
+(TODO-05): `TransactionsModule` imports `JsonServerModule` (and
+`NumeratorModule`) and `TransactionsService` calls both write methods. With
+still **no route/controller** invoking it in the running app, nothing
+triggers `create()` end-to-end, so the app still sends zero outbound
+requests.
 
 ## Contract exercise — curl against the mock
 

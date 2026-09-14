@@ -10,14 +10,21 @@ guard of TODO-02 §5: every NestJS-routed endpoint must send the `x-api-key`
 header (missing or wrong → **401**), with `HEAD /health/ping` exempt via
 `@Public()` — plus the TODO-03 contract layer for `POST /v1/transactions`
 (request/response DTOs, custom validators, shared enums/constants and the
-card-masking helper: compiled, **not yet wired to a route** — see
+card-masking helper — consumed since TODO-05 by the orchestration service,
+but still **not wired to any route** — see
 [DTO & validation layer (TODO-03)](#dto--validation-layer-todo-03)) — and the two
 external clients of TODO-04: the **Numerator client** (`src/numerator/`,
 Task 1) and the **json-server client** (`src/json-server/`, Task 2), both
 **registered in `AppModule` since Task 3** with the shared 4 s axios timeout;
-they boot with the app yet still perform no live traffic, because no business
-endpoint calls them —
-see [External clients (TODO-04)](#external-clients-todo-04)).
+they boot with the app yet still perform no live traffic, because nothing
+reaches their first caller: the **TODO-05 orchestration service**
+(`src/transactions/`: `TransactionsModule` + `TransactionsService` + pure
+`fee-rules.ts` — id reservation, masking, fee math and the
+`TRANSACTIONS_RETURN_BODY` gate) is **injectable only** — no
+controller/route exists yet, so it is never invoked at runtime and the app
+**still performs zero outbound HTTP calls** — see
+[Transactions orchestration service (TODO-05)](#transactions-orchestration-service-todo-05)
+and [External clients (TODO-04)](#external-clients-todo-04).
 See [API behavior at this stage](#api-behavior-at-this-stage)
 and [Plan references](#plan-references).
 
@@ -32,6 +39,7 @@ and [Plan references](#plan-references).
 - [API behavior at this stage](#api-behavior-at-this-stage)
 - [DTO & validation layer (TODO-03)](#dto--validation-layer-todo-03)
 - [External clients (TODO-04)](#external-clients-todo-04)
+- [Transactions orchestration service (TODO-05)](#transactions-orchestration-service-todo-05)
 - [Verify](#verify)
 - [npm scripts](#npm-scripts)
 - [Plan references](#plan-references)
@@ -56,13 +64,15 @@ docker compose up
 | json-server   | `http://localhost:8080` | Fake DB: transactions + receivables    |
 | Numerator API | `http://localhost:3000` | Sequential ID generation (mock)        |
 
-Status vs. the code (TODO-04): **both clients exist and are now wired** —
+Status vs. the code (TODO-04 + TODO-05): **both clients exist, are wired** —
 `src/numerator/` (Task 1) and `src/json-server/` (Task 2) are registered in
 `AppModule` (Task 3, commit `7a4a149`), each with its own timeout-configured
 axios instance, see
-[External clients (TODO-04)](#external-clients-todo-04) — but no business
-endpoint calls them yet, so the **running app still makes no outbound call to
-either service**. You can exercise the
+[External clients (TODO-04)](#external-clients-todo-04) — and since TODO-05
+have a first caller (`TransactionsService`, see
+[Transactions orchestration service (TODO-05)](#transactions-orchestration-service-todo-05))
+— but that service is reachable from **no endpoint yet**, so the **running
+app still makes no outbound call to either service**. You can exercise the
 Numerator contract directly with the curl recipes in that section — no
 NestJS app involved (json-server wire-shape recipes:
 [json-server client guide](json-server-client.md)).
@@ -100,7 +110,11 @@ exclusively through the validated `ConfigService` + `ConfigKeys`; the former
 temporary direct `process.env.PORT` read (with its `3001` fallback) is gone, so
 nothing bypasses validation at listen time. §5 (T5) added a fifth consumer:
 the global `ApiKeyGuard` reads `API_KEY` through `ConfigService` on *every*
-request — no consumer reads `process.env` directly.
+request — no consumer reads `process.env` directly. Later cycles added the
+rest: both client services (boot-time reads, TODO-04 Task 3) and
+`TransactionsService` (`TRANSACTIONS_RETURN_BODY` per `create()`, TODO-05) —
+see the consumed/deferred breakdown under [Environment
+configuration](#environment-configuration).
 
 ## Environment configuration
 
@@ -119,7 +133,7 @@ literal key strings (see `brief.md` §4.1 and global-plan decisions G4/G5).
 | `API_KEY`           | yes      | non-empty string                                     | Key the global `ApiKeyGuard` matches against `x-api-key` on every request (T5, active) | `your-secret-api-key-here` |
 | `SWAGGER_ENABLED`   | no       | `"true"` \| `"false"`, default `true`                | Swagger UI (`/docs`) on/off switch — consumed at bootstrap                 | `true`                     |
 | `CORS_ORIGINS`      | no       | comma-separated origins; absent/blank ⇒ allow all    | CORS allowlist — consumed by the `main.ts` bootstrap                       | `http://localhost:5173`    |
-| `TRANSACTIONS_RETURN_BODY` | no | `"true"` \| `"false"`, default `true`         | When `false`, `POST /v1/transactions` answers a bare `201 CREATED` instead of the full `{ transaction, receivable }` body (TODO-03 §2.4; plumbing only — runtime consumer arrives with the future orchestration controller, a later TODO — controllers are out of TODO-04's scope) | `true` |
+| `TRANSACTIONS_RETURN_BODY` | no | `"true"` \| `"false"`, default `true`         | Gates the response envelope: service-level consumer `TransactionsService` reads it per `create()` via `get(key, true)` — `false` ⇒ the service returns `undefined` (TODO-05; implemented at the SERVICE layer). The route shape (bare `201 CREATED` vs full body on `POST /v1/transactions`, TODO-03 §2.4) still awaits the controller TODO, so the flag is **not yet observable over HTTP** | `true` |
 | `MAX_RETRIES` | no | integer ≥ 1, default `10` (in-code, `src/numerator/numerator.constants.ts`) | **Total** CAS attempts per `NumeratorService.getNextId()` call — not extra retries (TODO-04 Task 1 §1.3) | `10` |
 | `NUMERATOR_BASE_BACKOFF_MS` | no | integer ≥ 1, default `20` (same file) | Base backoff for the conflict-retry sleep: `min(base × 2^retryIndex, 160 ms cap)` (TODO-04 Task 1 §1.3) | `20` |
 
@@ -134,22 +148,25 @@ silent fallback for required variables; fix `.env` and boot again.
 own `.env` is gitignored. Never put real secrets in `.env.example`.
 
 **Consumed now vs. later:** every validated `ConfigService` variable now
-has a consumer **except** `TRANSACTIONS_RETURN_BODY`. The `main.ts` bootstrap (TODO-02 §3,
-implemented) reads `PORT` (listen port, `getOrThrow`), `NODE_ENV` (selects
+has a consumer. The `main.ts` bootstrap (TODO-02 §3, implemented) reads
+`PORT` (listen port, `getOrThrow`), `NODE_ENV` (selects
 the morgan log format), `CORS_ORIGINS` (CORS allowlist; absent ⇒ allow all)
 and `SWAGGER_ENABLED` (mounts `/docs` or not; absent ⇒ enabled); the global
 `ApiKeyGuard` (TODO-02 §5, implemented) checks `API_KEY` on every request;
 `NumeratorService` (TODO-04 Task 1) resolves `NUMERATOR_API_URL` via
 `getOrThrow` at construction, plus the optional `MAX_RETRIES` /
-`NUMERATOR_BASE_BACKOFF_MS` knobs via `get(key, default)`; and
+`NUMERATOR_BASE_BACKOFF_MS` knobs via `get(key, default)`;
 `JsonServerService` (TODO-04 Task 2) resolves `JSON_SERVER_URL` via
-`getOrThrow` at construction. **Boot state (since Task 3):**
-`NumeratorModule` and `JsonServerModule` are registered in `AppModule`, so
-both client instances are constructed at startup and those config reads
-execute then — the clients simply have no endpoint calling them, so no
-outbound request is ever sent today. Still without any consumer:
-`TRANSACTIONS_RETURN_BODY`
-(see [DTO & validation layer (TODO-03)](#dto--validation-layer-todo-03)).
+`getOrThrow` at construction; and `TransactionsService` (TODO-05) reads
+`TRANSACTIONS_RETURN_BODY` via `get(key, true)` on every `create()` call.
+**Boot state (since Task 3 + TODO-05):**
+`NumeratorModule`, `JsonServerModule` and `TransactionsModule` are registered
+in `AppModule`, so all three services are constructed at startup and the
+clients' config reads execute then — but `create()` never runs (no route
+calls the orchestration service yet), so no outbound request is ever sent
+today and the return-body gate has no HTTP-observable effect until the
+controller TODO lands
+(see [Transactions orchestration service (TODO-05)](#transactions-orchestration-service-todo-05)).
 
 ## Run modes
 
@@ -173,7 +190,10 @@ With TODO-02 §3–§5 implemented, the HTTP surface behaves as follows
   It is **public** because the method-level `@Public()` decorator on
   `ping()` exempts it from the now-live global `ApiKeyGuard` (TODO-02 §5,
   T5) — without the decorator the guard would answer this route with `401`.
-- **Every other route 404s.** No business controllers are registered yet,
+- **Every other route 404s.** No business controllers are registered yet
+  (TODO-05 added the orchestration **service**, not a route —
+  `POST /v1/transactions` still 404s; see
+  [Transactions orchestration service (TODO-05)](#transactions-orchestration-service-todo-05)),
   so any other path — `/`, `/v1/anything`, even `/v1/health/ping` — returns
   the NestJS default 404 (a `GET` on `/health/ping` 404s too: the probe
   answers `HEAD` alone). Guards run only on **matched** routes, so an
@@ -321,10 +341,12 @@ logic or tests were created**. Consequences an agent must know today:
   other non-health route (see
   [API behavior at this stage](#api-behavior-at-this-stage)).
 - Swagger `/docs` still lists **only the health probe**; the DTOs carry full
-  `@ApiProperty` metadata but nothing renders it until the orchestration
-  layer declares the endpoint (later TODO — TODO-04 ships the clients, not
-  the endpoint).
-- `TRANSACTIONS_RETURN_BODY` has **no runtime consumer yet** (toggle contract
+  `@ApiProperty` metadata but nothing renders it until the **controller
+  TODO** declares the endpoint (TODO-04 shipped the clients and TODO-05 the
+  orchestration service — neither registers a route).
+- `TRANSACTIONS_RETURN_BODY` has had its first consumer since TODO-05 — a
+  **service-level** gate in `TransactionsService` — but still has **no
+  HTTP-observable effect** (no route invokes the service; toggle contract
   below).
 
 | Artifact (paths under `src/`) | Role |
@@ -335,10 +357,10 @@ logic or tests were created**. Consequences an agent must know today:
 | `transactions/dto/create-transaction-response.dto.ts` — `CreateTransactionResponseDto` | 201 envelope `{ transaction, receivable }`; documents the `TRANSACTIONS_RETURN_BODY` gate |
 | `transactions/dto/validators/` | Custom constraints `IsPositiveDecimalString` and `IsFutureExpirationDate` (exact reject messages in their JSDoc) |
 | `common/enums/` | `PaymentMethod` (`debit_card`/`credit_card`), `ReceivableStatus` (`paid`/`waiting_funds`) — string values **are** the wire values |
-| `common/constants/payment-fee.constants.ts` | `PAYMENT_FEE_PERCENTAGES`: debit `"2"`, credit `"4"` — fee **percentage strings**, not amounts |
-| `common/utils/card-number.util.ts` | `maskCardNumber()`: pure last-4-digits helper |
+| `common/constants/payment-fee.constants.ts` | `PAYMENT_FEE_PERCENTAGES`: debit `"2"`, credit `"4"` — fee **percentage strings**, not amounts — consumed by `TransactionsService`/`fee-rules.ts` since TODO-05 |
+| `common/utils/card-number.util.ts` | `maskCardNumber()`: pure last-4-digits helper — called on `TransactionsService`'s write path since TODO-05 |
 
-### What the contract guarantees (once the orchestration route is wired — later TODO)
+### What the contract guarantees (once the controller route is wired — pending TODO)
 
 `CreateTransactionDto` field rules — invalid payloads are rejected with
 **400** by the *existing* global `ValidationPipe`
@@ -373,27 +395,36 @@ passing the validator on 2028-05-01; refresh all expiration examples at once
 ### Masking policy
 
 The request DTO **accepts the full card number** — that is what the client
-sends. The last-4-only rule is an output/persistence invariant: the future
-orchestration service layer (later TODO) truncates with `maskCardNumber()`
-(`src/common/utils/card-number.util.ts`) before storing to json-server and
-answering; nothing stores or returns the full PAN. The helper is already in
-the repo but is **not called by anything yet**.
+sends. The last-4-only rule is an output/persistence invariant: the
+orchestration service `TransactionsService` (TODO-05,
+`src/transactions/transactions.service.ts`) truncates via `maskCardNumber()`
+(`src/common/utils/card-number.util.ts`) when building the transaction
+payload — *before* storing to json-server and answering; nothing stores or
+returns the full PAN. The helper now has a runtime caller (the service),
+though it is still unexercised over HTTP — no route invokes
+`create()` until the controller TODO lands.
 
 ### Envelope switch (`TRANSACTIONS_RETURN_BODY`)
 
 Optional boolean env var, default `true`, mirroring the `SWAGGER_ENABLED`
 pattern (schema + `ConfigKeys.TransactionsReturnBody` + `.env.example`; the
-env table above has its row). The toggled behavior belongs to the orchestration
-controller (later TODO; TODO-04 ships clients only): `true` ⇒ 201 with the full
-`{ transaction, receivable }` body,
-`false` ⇒ bare `201 CREATED`. **Setting it today has no observable effect** —
-TODO-03 ships plumbing only (user-approved global-plan §5 resolution).
+env table above has its row). Consumed at the **service layer** since TODO-05:
+`TransactionsService.create()` returns the full `{ transaction, receivable }`
+envelope (built from the client-echoed bodies) when the flag is `true`, and
+`undefined` when `false` (`get(key, true)`). The route-level translation —
+`true` ⇒ 201 with the body, `false` ⇒ bare `201 CREATED` (TODO-03 §2.4) —
+belongs to the still-pending controller TODO. **Setting the flag today still
+has no HTTP-observable effect** — no route invokes the service (TODO-03
+shipped plumbing only; TODO-05 shipped the service gate).
 
 ### Verifying the contract today
 
 Runtime exercises (curl against the endpoint, Swagger rendering, validator
-REPL checks) belong to the future orchestration TODO that wires the route —
-out of scope for this cycle (TODO-03 §6:
+REPL checks) belong to the controller TODO that wires the route — the
+orchestration service landed with TODO-05
+(see [Transactions orchestration service
+(TODO-05)](#transactions-orchestration-service-todo-05)) but nothing invokes it
+from HTTP yet; out of scope for this cycle (TODO-03 §6:
 no tests). The current green signal for the layer is that it compiles and
 lints as part of the app:
 
@@ -403,8 +434,10 @@ npm run lint    # exit 0
 ```
 
 Each new file's JSDoc header records its purpose, TODO-03 section, exact
-validator semantics/messages and its next consumers (TODO-04
-controller/service/specs).
+validator semantics/messages and current consumers (the TODO-05 docs sweep
+refreshed the stale ones: `TransactionsService` + `fee-rules.ts` now consume
+the masking helper, fee constants and enums — the controller and every test
+spec remain later TODOs).
 
 ## External clients (TODO-04)
 
@@ -414,8 +447,10 @@ only — no other HTTP library). **All three tasks are implemented** on branch
 client) and **Task 3 (module registration + HTTP timeout)** — both modules
 are now wired into `AppModule` and both clients boot with a 4 s Axios
 timeout (commit `7a4a149`). Everything below describes what exists today;
-no client performs live traffic at runtime only because **no business
-endpoint calls them yet** (orchestration stays out of TODO-04's scope).
+no client performs live HTTP traffic at runtime only because their first
+caller — the TODO-05 `TransactionsService` — is still unreachable from any
+route (see [Transactions orchestration service
+(TODO-05)](#transactions-orchestration-service-todo-05)).
 
 ### Numerator client — `src/numerator/` (Task 1)
 
@@ -448,8 +483,9 @@ value). Every other failure — network, timeout, 5xx, or a 400 **without**
 anything. Conflicts log a `warn` line (attempt, current, candidate);
 numerator values are non-sensitive, and card data must never appear in these
 logs (global plan G13). Mapping any of these errors to HTTP responses (e.g.
-503) is **not** this client's job — deferred to the orchestration layer
-(global plan G18).
+503) is **not** this client's job — `TransactionsService` (TODO-05) also
+propagates them raw on purpose; HTTP mapping is the pending controller
+TODO's job (global plan G18).
 
 **Config flow:** all reads go through `ConfigService` + `ConfigKeys` — never
 `process.env`. `NUMERATOR_API_URL` is required (`getOrThrow` in the service
@@ -462,8 +498,9 @@ constructed on every boot and resolves its config reads then — and its
 `HttpModule` import uses the timeout-configured
 `HttpModule.register({ timeout: HTTP_TIMEOUT_MS })` form (`@nestjs/axios`
 **v4 has no `forRoot`** — decision T1-D7, applied by plan decision T3-D1).
-`npm run start:dev` still exercises none of the HTTP path, because no
-controller calls `getNextId()` yet.
+`npm run start:dev` still exercises none of the HTTP path: the code that
+calls `getNextId()` exists since TODO-05 (`TransactionsService`), but no
+controller has wired a route to run it.
 
 ### json-server client — `src/json-server/` (Task 2)
 
@@ -482,7 +519,8 @@ Summary of the committed surface:
 - **What it never does:** generate ids, calculate fees, mask card numbers,
   default fields (even `create_date`), assert the 201 status (T2-D3) or
   **retry** — fail-fast is explicit TODO-04 §Out of scope policy; mapping
-  failures to HTTP responses is the orchestration layer's job (G18).
+  failures to HTTP responses is the pending controller TODO's job (G18;
+  `TransactionsService` propagates them raw until then, TODO §Task 5).
 - **Config:** `JSON_SERVER_URL` via `ConfigService.getOrThrow` at
   construction; trailing slashes normalized once (T2-D1). **No new env
   key arrived with this task** — the variable was validated since TODO-02.
@@ -501,9 +539,10 @@ running. The mock is started via `docker compose up` at the repo root, but
 **never run docker commands autonomously from an agent session — ask the
 user** (TODO-04 §Context). If `localhost:3000` refuses connections, that
 just means the service is down; the expected shapes below document
-the exact traffic `NumeratorService` sends when `getNextId()` runs (the
-client is now wired, but still nothing calls it until the orchestration
-TODO provides an endpoint).
+the exact traffic `NumeratorService` sends when `getNextId()` runs — today
+the first caller exists (`TransactionsService`, TODO-05) but no route runs
+it; the client also boots config reads, so until the controller TODO
+provides the endpoint, none of this traffic happens):
 
 PowerShell (always `curl.exe`; JSON bodies need the `\"` escaping):
 
@@ -541,12 +580,115 @@ invalid-params calls (3 and 4) change nothing. Call 1 (`GET`) is read-only.
   `src/common/constants/http-timeout.constants.ts` (per the TODO
   §Configuration & resilience 3–5 s guidance; v4 has no `forRoot` —
   T1-D7/T3-D1). Both services are injectable app-wide from here on; they
-  boot with config reads only and still send **zero outbound requests**
-  because no controller/orchestration exists yet (out of TODO-04 scope).
-- **Still out of scope (not built):** orchestration, fee calculation,
-  card-number masking, controller endpoints — later TODOs own them.
-- **Tests:** unit/e2e suites for both clients are explicitly deferred by
-  TODO-04 (§Out of scope) to a later TODO.
+  boot with config reads only and send **zero outbound requests** at
+  runtime — `TransactionsService` (TODO-05) is their first caller, but no
+  HTTP route invokes it until the controller TODO lands.
+- **Landed since then (TODO-05):** the orchestration service, its module,
+  fee calculation and the card-number masking call-site — see
+  [Transactions orchestration service (TODO-05)](#transactions-orchestration-service-todo-05) below.
+- **Still out of scope (not built):** controller endpoints, HTTP error
+  mapping (G18) and the guard/Swagger wiring around `POST /v1/transactions`
+  — the controller TODO owns them.
+- **Tests:** unit/e2e suites for both clients remain explicitly deferred by
+  TODO-04 (§Out of scope) to a later TODO; TODO-05 adds none either.
+
+### Transactions orchestration service (TODO-05)
+
+TODO-05 (`.agent/todos/20260913/20260913-todo-5.md`, branch
+`feat/transaction-orchestration`, commits `207f79c` `759bb62` `7b2176c`)
+implemented the **business core** from a valid `CreateTransactionDto` to a
+persisted transaction + receivable pair — as a service only, per the TODO's
+explicit out-of-scope list (no controller/route/Swagger/guard usage/tests).
+
+**Files** (`src/transactions/`):
+
+| Artifact | Role |
+|----------|------|
+| `transactions.service.ts` — `TransactionsService.create(dto)` | The 9-step orchestrator (below); **exported and injectable app-wide** — nothing calls it over HTTP yet |
+| `transactions.module.ts` — `TransactionsModule` | Imports `NumeratorModule` + `JsonServerModule` (both already registered by TODO-04 Task 3; importing them grants the exports), provides + exports the service, **no controller**; registered in `AppModule` |
+| `fee-rules.ts` | Pure fee/date functions (no Nest deps — designed as the unit-test target of a later TODO): `resolveReceivableStatus`, `computeTotal`, `formatDateDDMMYYYY` |
+
+**`create()` flow (strict order — the 9 steps of TODO §Flow):**
+
+1. `transactionId = await numeratorService.getNextId()`
+2. `receivableId = await numeratorService.getNextId()` — **both ids reserved
+   before any write** (second reservation fails ⇒ nothing persisted, zero
+   orphans)
+3. `maskCardNumber(dto.cardNumber)` at payload-build time → last-4 only
+   stored/returned (full PAN never persists)
+4. Fee data: `discount = PAYMENT_FEE_PERCENTAGES[dto.method]`;
+   `status = resolveReceivableStatus(method)`;
+   `total = computeTotal(subtotal, discount)`;
+   `create_date = formatDateDDMMYYYY(new Date())` → `DD/MM/YYYY` of local
+   now
+5. Build `CreateTransactionPayload` (reserved id + DTO fields with masked
+   card — transport interface, `src/json-server/interfaces/`)
+6. Build `CreateReceivablePayload` (reserved id + `transaction_id` + fee
+   data)
+7. `jsonServerService.createTransaction(payload)`
+8. `jsonServerService.createReceivable(payload)` (strict
+   transaction-then-receivable order)
+9. Gate on `ConfigKeys.TransactionsReturnBody` via
+   `configService.get(key, true)`: return the envelope
+   (`CreateTransactionResponseDto`, both bodies **echoed from the client
+   responses**) — or `undefined` when the flag is `false` (the future
+   controller relaying `undefined` yields Nest's natural **bare `201`**;
+   the HTTP status itself is controller territory)
+
+**Fee rules table** (TODO §Fee, `brief.md` §3.2 — fee percentages come only
+from `PAYMENT_FEE_PERCENTAGES`):
+
+| Method | Fee % | `discount` (stored) | Receivable `status` | Settlement | `create_date` |
+|--------|-------|---------------------|---------------------|------------|---------------|
+| `debit_card`  | 2 | `"2"` | `paid`          | D+0  | now, `DD/MM/YYYY` |
+| `credit_card` | 4 | `"4"` | `waiting_funds` | D+30 | now, `DD/MM/YYYY` |
+
+- **Payment timing lives in `status`, NOT in a `payment_date` field** (user
+  ruling "Option B", 2026-09-14 — supersedes TODO §Fee's payment-date
+  phrasing, impl-plan §8 D1). There is no `payment_date` anywhere: no
+  payload field, no DTO field, no helper, and **no date-arithmetic code**
+  (a D+30 computation would be dead). The D+30 settlement of credit-card
+  receivables is expressed purely by the `waiting_funds` status value.
+- `total = subtotal × (1 − discount/100)` computed in **integer cents**
+  (`computeTotal`: subtotal→cents via `Math.round(parseFloat × 100)`, then
+  `Math.floor(cents × remaining% / 100)`, then re-formatted as
+  `whole.dd` string). "Drop decimals beyond 2 positions" = **truncation
+  toward −∞** (positive ⇒ toward zero), never banker's/decimal rounding.
+  Worked examples:
+  - `"250.00"` @ credit 4% → `25000 × 96 / 100 = 24000` → `"240.00"`
+  - `"340.50"` @ debit 2% → `34050 × 98 / 100 = 33369` → `"333.69"`
+  - `"10.01"` @ credit 4% → `1001 × 96 / 100 = 9609.6` → floor → `9609` →
+    `"9.60"`
+  - `"0.01"` @ debit 2% → `1 × 98 / 100 = 0.98` → floor `0` → `"0.00"` (valid
+    edge; the DTO validator still only requires a positive subtotal)
+- `subtotal` = `dto.value` verbatim as string; all money fields stay
+  **strings** on payloads and responses (wire invariants,
+  [DTO & validation layer](#dto--validation-layer-todo-03)).
+
+**Errors (TODO §Error behaviour):** zero try/catch — `getNextId()`
+rejections (Numerator domain errors) and `JsonServerRequestError` from
+either write propagate **raw**. `createTransaction` OK but
+`createReceivable` failing leaves a **partially written state**; accepted
+at this stage per TODO §Error (compensation/saga + HTTP mapping are the
+controller TODO's scope, global plan G18). The one success log line carries
+**only** the two numeric ids — never payloads/card data.
+
+**How to use / test later (AI-agent guidance):**
+- `TransactionsService` is injectable anywhere in the DI graph today, but —
+  house rule — **this cycle executed NO live HTTP** (route absent; services
+  may be down), so there are **no live-verified wire observations** for
+  `create()` traffic; expected shapes above are transcribed from the
+  interfaces and the two client docs
+  ([json-server client guide](json-server-client.md), Numerator section
+  above).
+- Later unit-test target (deferred testing TODO): `fee-rules.ts` needs no
+  Nest/DI harness (pure functions; examples above are ready-made tables);
+  `create()` order/echo behavior needs `NumeratorService` +
+  `JsonServerService` mocks only. The gate reads `get(key, true)` — test in
+  both flag states.
+- The green signal today stays `npm run build` + `npm run lint` (exit 0);
+  `POST /v1/transactions` still **404s** (see
+  [API behavior at this stage](#api-behavior-at-this-stage)).
 
 ## Verify
 
@@ -666,5 +808,9 @@ of scope for TODO-02 and arrive in later work.
 - [How to write TODO files](how-to-write-todo-files.md) — format used by `.agent/todos/`.
 - [json-server client guide](json-server-client.md) — TODO-04 Task 2 deep-dive
   (endpoints, §2.4 payloads, failure model, curl wire-shape exercise).
+- TODO-05 orchestration: this guide's
+  ["Transactions orchestration service (TODO-05)"](#transactions-orchestration-service-todo-05)
+  section; global/impl plans in `.kilo/plans/20260914-transaction-orchestration.md`
+  (+ `-impl.md`); task file `.agent/todos/20260913/20260913-todo-5.md`.
 - Target architecture of the completed API (status block marks the parts
   already implemented): [`.agent/project-info/architecture.md`](../.agent/project-info/architecture.md).

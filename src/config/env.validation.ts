@@ -24,8 +24,12 @@
  *   the two optional knobs via `get(key, default)`); JSON_SERVER_URL →
  *   JsonServerService (TODO-04 Task 2, implemented —
  *   `src/json-server/json-server.service.ts`; URL via `getOrThrow`).
- *   TRANSACTIONS_RETURN_BODY → transactions controller (TODO-04; plumbing
- *   only as of TODO-03 §2.4). All ten are *validated* at bootstrap.
+ *   TRANSACTIONS_RETURN_BODY → `TransactionsService` (TODO-05,
+ *   implemented — `src/transactions/transactions.service.ts`; read per
+ *   `create()` via `get(key, true)`; gate: envelope returned or
+ *   `undefined` — the controller still has to turn `undefined` into a
+ *   bare `201`, so only the service-level behavior exists today).
+ *   All ten are *validated* at bootstrap.
  * - URL fields require a protocol (`require_protocol`, plan addendum A4-R):
  *   protocol-less garbage fails at startup instead of at the first HTTP call.
  * - Adding a required field here also requires updating `.env.example` and
@@ -88,7 +92,7 @@ class EnvironmentVariables {
   @IsString()
   CORS_ORIGINS: string;
 
-  /** Optional; absent keeps the default `true` (TODO-03 §2.4: POST /v1/transactions returns the full { transaction, receivable } body; `false` ⇒ bare 201 CREATED). */
+  /** Optional; absent keeps the default `true`. Gate lives at the SERVICE layer since TODO-05 (`TransactionsService.create` returns the { transaction, receivable } envelope, or `undefined` when `false`); the endpoint's bare-`201 CREATED` shape (TODO-03 §2.4) awaits the controller TODO. */
   @IsOptional()
   @Transform(({ value }) => transformBoolString(value))
   @IsBoolean()

@@ -18,8 +18,12 @@
  * implemented — `src/numerator/numerator.service.ts`; URL via `getOrThrow`,
  * optional knobs via `get(key, default)`); JsonServerUrl → JsonServerService
  * (TODO-04 Task 2, implemented — `src/json-server/json-server.service.ts`;
- * URL via `getOrThrow`). TransactionsReturnBody → transactions controller
- * (TODO-04; plumbing only as of TODO-03 §2.4).
+ * URL via `getOrThrow`). TransactionsReturnBody → `TransactionsService`
+ * (TODO-05, implemented — `src/transactions/transactions.service.ts`;
+ * service-level gate via `get(key, true)`: `create()` returns the
+ * `{ transaction, receivable }` envelope or `undefined`; the bare `201`
+ * for the `false` case is still the future controller's behavior — none
+ * is wired yet).
  */
 export const ConfigKeys = {
   NodeEnv: 'NODE_ENV',

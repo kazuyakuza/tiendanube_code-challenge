@@ -7,12 +7,14 @@
  * Fee rules (brief §3.2 USER DECISION): `discount` is the fee PERCENTAGE as
  * a string ("2" debit / "4" credit); `total = subtotal × (1 − discount/100)`.
  *
- * AI-agent guidance: TODO-04 nests this class in
- * `CreateTransactionResponseDto.receivable`; Swagger renders it only once
- * the controller exists. Wire value invariants: all amounts (`subtotal`,
+ * AI-agent guidance: `TransactionsService.create` nests the echoed
+ * receivable body in `CreateTransactionResponseDto.receivable` since
+ * TODO-05; Swagger renders it only once the (still pending) controller
+ * TODO exists. Wire value invariants: all amounts (`subtotal`,
  * `discount`, `total`) and ids are STRINGS, `status` carries
- * `ReceivableStatus` values — the business computations stay in the
- * service, never in this output contract.
+ * `ReceivableStatus` values — the business computations live in the
+ * orchestration service (`src/transactions/fee-rules.ts`), never in this
+ * output contract.
  */
 import { ApiProperty } from '@nestjs/swagger';
 import { ReceivableStatus } from '../../common/enums/receivable-status.enum';

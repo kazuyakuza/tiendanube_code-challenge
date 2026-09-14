@@ -45,7 +45,7 @@ export class IsFutureExpirationDateConstraint implements ValidatorConstraintInte
    * Rejection message (no i18n key — the literal text is the message):
    * `<property> must be a valid MM/YY date that has not expired (e.g. "04/28")`.
    * @param validationArguments class-validator context; supplies the property name.
-   * @returns the message string shown in the 400 `message[]` once the route exists (TODO-04).
+   * @returns the message string shown in the 400 `message[]` once the route exists (controller TODO pending).
    */
   defaultMessage(validationArguments: ValidationArguments): string {
     return `${validationArguments.property} must be a valid MM/YY date that has not expired (e.g. "04/28")`;

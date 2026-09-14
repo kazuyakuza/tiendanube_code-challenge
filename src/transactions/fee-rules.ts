@@ -15,6 +15,9 @@
  * USER RULING (Option B, 2026-09-14): there is NO payment_date field and NO
  * future-date computation anywhere — D+0/D+30 timing is expressed ONLY via
  * `status`. Do not add add-days code here (it would be dead code).
+ *
+ * Related: sole consumer `./transactions.service.ts`; guide
+ * `docs/app-setup.md` → "Transactions orchestration service (TODO-05)".
  */
 import { PaymentMethod } from '../common/enums/payment-method.enum';
 import { ReceivableStatus } from '../common/enums/receivable-status.enum';

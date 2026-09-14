@@ -9,6 +9,9 @@
  * read. `TransactionsService` is EXPORTED so the future controller module
  * (next TODO) can consume it; NO controller exists yet — no route points at
  * this module.
+ *
+ * Related: `docs/app-setup.md` → "Transactions orchestration service
+ * (TODO-05)".
  */
 import { Module } from '@nestjs/common';
 import { JsonServerModule } from '../json-server/json-server.module';
