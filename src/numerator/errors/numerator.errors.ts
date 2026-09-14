@@ -13,7 +13,9 @@
  *
  * AI-agent guidance: mapping these to HTTP responses (e.g. 503) is the
  * orchestration layer's job, NOT this client's (global plan G18) — no status
- * codes belong in this file.
+ * codes belong in this file. That mapping is LIVE since TODO-06 Cycle B:
+ * the global `AllExceptionsFilter` (`src/common/filters/`) answers all three
+ * with 503 carrying these messages verbatim.
  */
 
 export class NumeratorUnavailableError extends Error {

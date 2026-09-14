@@ -18,7 +18,8 @@
  *   `process.env`); MAX_RETRIES and NUMERATOR_BASE_BACKOFF_MS are optional
  *   with in-code defaults from `numerator.constants.ts` (global plan G1/G2/G3).
  * - Error taxonomy lives in `errors/numerator.errors.ts`; mapping errors to
- *   HTTP responses is NOT this client's job (global plan G18).
+ *   HTTP responses is NOT this client's job (global plan G18) — since
+ *   TODO-06 Cycle B the global `AllExceptionsFilter` maps them to 503.
  * - `MAX_RETRIES` counts TOTAL CAS attempts (not extra retries); the backoff
  *   sleep happens only between attempts (the final conflict does not sleep).
  * - Numerator values are non-sensitive numbers — safe to log (G13). Never log

@@ -4,8 +4,10 @@
 
 ## Current Work Focus
 
-**TODO-06 IN PROGRESS (branch `feat/transactions-endpoint`) — Cycle A
-LANDED, Cycle B PENDING.** `POST /v1/transactions` is LIVE: commit `d12676f`
+**TODO-06 RUNTIME-COMPLETE (branch `feat/transactions-endpoint`) — BOTH
+cycles LANDED; awaiting the workflow's step-5 closure (TODO-file
+rename/merge/push are deliberately NOT done yet).** `POST /v1/transactions`
+is LIVE: commit `d12676f`
 added the thin `TransactionsController` (registered in
 `TransactionsModule`) — auth through the existing global `ApiKeyGuard`
 (401 on missing/wrong `x-api-key`), global ValidationPipe 400, 201
@@ -14,17 +16,87 @@ service-level `TRANSACTIONS_RETURN_BODY` gate, full Swagger operation at
 `/docs`. The route now invokes `TransactionsService.create()` end-to-end,
 so outbound HTTP to the mock services happens while it is called (boot is
 still config-reads-only). **Cycle B (§Task 2 of the same TODO file —
-global exception filter G4 + partial-failure compensation G5) is IN
-PROGRESS on this same branch:** until it lands, domain errors surface as
-the NestJS default 500 and a failed second write still leaves an orphan
-transaction. TODO-06 is NOT complete (§Task 1/3 `[DONE]` marks come with
-4.6; §Task 2 stays open). Gates: build/lint/test exit 0 + DI-boot sanity.
+global exception filter G4 + partial-failure compensation G5) is LANDED
+on this same branch:** the global `AllExceptionsFilter` (`APP_FILTER`)
+now answers every failure with the structured `{ statusCode, message,
+error }` body (Numerator errors → 503; `JsonServerRequestError` → 503 on
+unknown/≥500, **502** on 4xx, messages verbatim; guard-401 / pipe-400 —
+array `message` preserved — and router-404 pass through unchanged;
+unknown errors → generic 500 everywhere + server-side stack log ONLY,
+leak impossible by construction), and a receivable-write failure after
+the transaction was persisted is compensated by
+`TransactionCompensationService.deleteTransaction` (bounded DELETE retry:
+3 attempts, 200×2^n ms capped 1600 ms, 404 = already-gone = success,
+NEVER throws) before the ORIGINAL error is rethrown; a survivor orphan
+logs one `logger.error` ids+reason line — orphans **reduced, not
+eliminated** (§2.2). Gates per cycle: build/lint/test exit 0 + temp
+`ERROR-SANITY-OK` in-process filter proof. Still open: §Task 2 `[DONE]`
+(4.5b/4.6) and workflow step 5 (TODO archive/merge/push) — §Task 1/§3
+were `[DONE]`-marked at `8133d5a`.
 
 **Previous cycles closed:** TODO-05 (orchestration service — merged to
 `main` at `5cf97ef`, pushed), TODO-04 (external clients — merged at
 `f0a979a`, pushed), TODO-03 (DTO layer), TODO-02 (foundation).
 
 ## Recent Changes
+
+- 2026-09-14: TODO-06 **Cycle B** — error handling & compensation
+  (§Task 2 §2.1–§2.3 of `.agent/todos/20260913/20260913-todo-6.md`; same
+  branch `feat/transactions-endpoint`; binding global-plan G4/G5/G7 +
+  gates G9; cycle plan decisions CB-D1…CB-D8). 4.2 commits: **`2416915`**
+  new `src/common/filters/all-exceptions.filter.ts` — single catch-all
+  `@Catch()` `AllExceptionsFilter`, registered `APP_FILTER`
+  (`@nestjs/core`) in `app.module.ts`: every reply is the structured
+  `{ statusCode, message, error }` body; `HttpException`s (pipe-400 with
+  its **string-array** `message`, guard-401, router-404/G10) re-emit their
+  own status+shape VERBATIM (CB-D2a); Numerator domain errors → **503**;
+  `JsonServerRequestError` → **503** on unknown/≥500 and **502** on 4xx —
+  502 chosen over the "or 500" alternative (upstream contract anomaly
+  behind this gateway; matches Cycle-A `@ApiBadGatewayResponse`) — domain
+  messages verbatim (payload-safe by construction, CB-D2b); unknown →
+  generic 500 in EVERY environment with `message+stack` server-side
+  `Logger.error` ONLY, no ConfigService/NODE_ENV read — production
+  no-leak by construction (CB-D3 log-only); local `HTTP_STATUS_PHRASES`
+  map, zero new deps (`http-status` rejected). **`1b73935`** compensation:
+  `compensation.constants.ts` (3 attempts / 200 ms base / 1600 ms cap —
+  in-code knobs, NO new env keys per G7),
+  `TransactionCompensationService.deleteTransaction` — bounded DELETE of
+  the orphaned `{JSON_SERVER_URL}/transactions/:id`, 404 = already-gone =
+  success (CB-D4a), **NEVER throws** (`true`/`false`, CB-D4) — over the
+  `TransactionsModule`'s OWN `HttpModule.register({ timeout })` instance
+  (CB-D5, T3-D2; service provided, not exported; `src/json-server/`
+  ZERO diffs, constant imported only) — plus the pipeline's **only**
+  try/catch in `TransactionsService.create()` wrapping exactly
+  `createReceivable` and catching ANY error (CB-D6: the row is already
+  persisted then; Numerator fails stay pre-write/outside), awaiting
+  `compensateOrphanedTransaction` then **rethrowing the ORIGINAL error**
+  (never masked, G5/R3); a surviving orphan yields ONE `logger.error`
+  ids+reason line and the client STILL gets the mapped error — orphans
+  **reduced, not eliminated** (§2.2; no saga/circuit-breaker).
+  **`271c94b`** = CB-D7 controller Swagger/JSDoc truth fix. 4.3: review
+  fix **`35d314d`** — filter booleans extracted to single-section helpers
+  `isNumeratorError`/`isUpstreamFailure` (recorded deviation:
+  `isNumeratorError` returns a TS **type predicate**, beyond the plan
+  snippet, to preserve `resolveDomainBody` narrowing; behavior identical);
+  simplify **`6e709f9`** — stale-comment sweep + reason-computation hoist
+  (behavior identical). Gates: `npm run build`/`lint`/`test` exit 0 +
+  temp in-process `tmp-error-sanity.js` printing **`ERROR-SANITY-OK`**
+  asserting the full table above incl. the 400 array-message pass-through
+  regression check (CB-D8; deleted after, never committed — supertest
+  boot rejected as overkill for the same code path). This 4.4 docs step
+  (this bullet): tree-wide stale-claim sweep — comment-only G18 pointer
+  flips in the G7-frozen client headers (`numerator.service.ts`,
+  `numerator.errors.ts`, `json-server.errors.ts`: mapping is now LIVE in
+  the filter; precedent: TODO-05/Cycle-A 4.4 sweeps), `docs/app-setup.md`
+  pending-callout flips + new "Error handling & compensation (TODO-06
+  Cycle B)" section (§2.1 contract table, 502 rationale, CB-D3
+  generic-500 rule, privacy rule, compensation knob table, user-run
+  fault-injection recipes incl. the honest 502/compensation deferred-to-
+  TODO-07 note + production stack check), `architecture.md` header STATUS
+  + Cycle-B dated entry + tree/conventions/concurrency flips,
+  `.agent/project-structure.md` filters/ + compensation lines,
+  this file. Remaining TODO-06 work: §Task 2 `[DONE]` (4.6) + step-5
+  archive/merge only; tests = TODO-07.
 
 - 2026-09-14: TODO-06 **Cycle A** — transactions controller & wiring
   (§Task 1 + §Task 3 of `.agent/todos/20260913/20260913-todo-6.md`; global
@@ -58,8 +130,9 @@ transaction. TODO-06 is NOT complete (§Task 1/3 `[DONE]` marks come with
   endpoint (TODO-06 Cycle A)" section + behavior/wiring/pending-work flips
   throughout, `.agent/project-structure.md` transactions line,
   `architecture.md` dated entry + header STATUS + tree + flow-filter
-  statuses, this file. TODO-06 §Task 1/§3 `[DONE]` marks + 4.5b/4.6 are
-  still open steps; §Task 2 (Cycle B) pending.
+  statuses,   this file. TODO-06 §Task 1/§3 `[DONE]` marks landed at `8133d5a`; §Task 2
+  (Cycle B) implemented AFTER this bullet — see the Cycle-B bullet below;
+  open mechanics now: §Task 2 `[DONE]` (4.6) + step 5 for the whole TODO.
 
 - 2026-09-14: TODO-05 step-5 closure — renamed `20260913-todo-5.md` →
   `20260913-todo-5-DONE.md` (commit `586ecbf`), merged to `main` via
@@ -324,6 +397,14 @@ transaction. TODO-06 is NOT complete (§Task 1/3 `[DONE]` marks come with
 
 ## Recorded Facts
 
+- TODO-06 is **runtime-complete** on `feat/transactions-endpoint`:
+  Cycle A (`d12676f`, docs `9ed4ca7`/`8133d5a`) + Cycle B (`2416915`
+  `1b73935` `271c94b` `35d314d` `6e709f9`, 4.4 docs incl. this step) —
+  the §2.1 error table is fully effective and partial-failure
+  compensation ships; the error contract is now testable (TODO-07).
+  The §Task 2 `[DONE]` mark, the TODO rename/archive, the merge to
+  `main` and the push are **open workflow mechanics only** — nothing was
+  renamed or archived by this docs step.
 - TODO-05 is complete: all 5 §Task `[DONE]`, archived as
   `20260913-todo-5-DONE.md`, merged to `main` (`5cf97ef`), pushed to
   `origin`. Feature branch `feat/transaction-orchestration` deleted
@@ -356,30 +437,27 @@ transaction. TODO-06 is NOT complete (§Task 1/3 `[DONE]` marks come with
 
 ## Immediate Next Steps
 
-1. **TODO-06 Cycle B — error handling & compensation (IN PROGRESS — same
-   TODO file `20260913-todo-6.md` §Task 2, same branch
-   `feat/transactions-endpoint`)** — global exception filter registered
-   via `APP_FILTER` in `app.module.ts` mapping domain errors per global
-   plan G4 (`NumeratorUnavailableError`/`NumeratorRetriesExhaustedError`/
-   `InvalidNumeratorValueError` → 503; `JsonServerRequestError`
-   status undefined/≥500 → 503, 4xx → 502; structured
-   `{ statusCode, message, error }` bodies; pass through guard 401 /
-   ValidationPipe 400 / router 404; no stack leak in production), and
-   partial-failure compensation per G5 (`TransactionCompensationService`:
-   `DELETE /transactions/:id` with retry loop + backoff from a
-   named-constants file; the ONE allowed try/catch around the
-   `createReceivable` call in `TransactionsService.create()`; on
-   compensation failure log ids-only and re-throw the ORIGINAL error) —
-   only then is the TODO §2.1 error table fully effective; until it
-   lands, those failures answer with the NestJS default 500 on the live
-   route and an orphan transaction may persist. 201 bare-vs-envelope
-   needs NO work (decided + live: service gate + direct relay).
-2. **Deferred test TODO (separate cycle):** unit tests first (pure
-   `fee-rules.ts` ⇒ no DI; `TransactionsService` with mocked clients — verify the
-   9-step order, gate both `TRANSACTIONS_RETURN_BODY` states, masking
-   call-site), then e2e against the now-live `POST /v1/transactions`
-   once Cycle B finalizes its error contract — `passWithNoTests`
-   keeps the suite green until then.
+1. **TODO-06 — workflow mechanics ONLY (no code work remains).** Both
+   cycles are runtime-complete on `feat/transactions-endpoint` (§Task 1 +
+   §Task 3 marked `[DONE]` at `8133d5a`; §Task 2 implemented in
+   `2416915`/`1b73935`/`271c94b` + review-fix `35d314d` + simplify
+   `6e709f9` + this 4.4 docs step). Remaining Critical-Workflow steps for
+   the CALLER, in order: 4.5 verification → 4.6 §Task 2 `[DONE]` → step 5
+   (rename `.agent/todos/20260913/20260913-todo-6.md` → `-DONE`, merge
+   `feat/transactions-endpoint` to `main`, push to `origin` ONLY). No
+   other TODO should start until this thread closes (user-picked order).
+2. **TODO-07 — test cycle (NEXT RUNTIME WORK, user's pick):** unit tests
+   first (pure `fee-rules.ts` ⇒ no DI; `TransactionsService` with mocked
+   clients — verify the 9-step order, gate both `TRANSACTIONS_RETURN_BODY`
+   states, masking call-site) + **the Cycle-B error contract it explicitly
+   deferred**: filter mapping rows (503/502/500 + verbatim messages, the
+   `ERROR-SANITY-OK` temp-script scenarios are the ready-made test list),
+   the compensation loop (404=success, exhaustion → one `logger.error`,
+   original-error rethrow) incl. the receivable-only-failure 502 path
+   which §"Error handling & compensation" documents as non-forceable via
+   config; then e2e against the live `POST /v1/transactions` — the full
+   structured error contract IS LIVE and stable to test now;
+   `passWithNoTests` keeps the suite green until then.
 
 The backlog files `.agent/todos/20260913/20260913-todo-{5,6,7}.md` are now
 **TRACKED** user-owned future work (committed at the user's explicit
