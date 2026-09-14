@@ -18,11 +18,13 @@
  *   `main.ts` bootstrap (T3, implemented; required keys via `getOrThrow`,
  *   `SWAGGER_ENABLED` via `get(key, true)` — plan addendum A3-R); API_KEY →
  *   global ApiKeyGuard (T5, implemented — `src/common/guards/api-key.guard.ts`,
- *   read via `getOrThrow`); NUMERATOR_API_URL /
- *   JSON_SERVER_URL → external-service clients (later TODOs — the only keys
- *   still without a consumer). TRANSACTIONS_RETURN_BODY → transactions
- *   controller (TODO-04; plumbing only as of TODO-03 §2.4). All eight are
- *   *validated* at bootstrap.
+ *   read via `getOrThrow`); NUMERATOR_API_URL / MAX_RETRIES /
+ *   NUMERATOR_BASE_BACKOFF_MS → NumeratorService (TODO-04 Task 1,
+ *   implemented — `src/numerator/numerator.service.ts`; URL via `getOrThrow`,
+ *   the two optional knobs via `get(key, default)`); JSON_SERVER_URL →
+ *   json-server client (TODO-04 Task 2 — the only key still without a
+ *   consumer). TRANSACTIONS_RETURN_BODY → transactions controller (TODO-04;
+ *   plumbing only as of TODO-03 §2.4). All ten are *validated* at bootstrap.
  * - URL fields require a protocol (`require_protocol`, plan addendum A4-R):
  *   protocol-less garbage fails at startup instead of at the first HTTP call.
  * - Adding a required field here also requires updating `.env.example` and
@@ -90,6 +92,20 @@ class EnvironmentVariables {
   @Transform(({ value }) => transformBoolString(value))
   @IsBoolean()
   TRANSACTIONS_RETURN_BODY: boolean = true;
+
+  /** Optional; absent keeps the Numerator client default of 10 total CAS attempts (TODO-04 §1.3). */
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  MAX_RETRIES: number;
+
+  /** Optional; absent keeps the Numerator client base backoff of 20 ms (TODO-04 §1.3). */
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  NUMERATOR_BASE_BACKOFF_MS: number;
 }
 
 export function validateEnv(config: Record<string, unknown>): EnvironmentVariables {
