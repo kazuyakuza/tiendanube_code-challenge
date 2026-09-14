@@ -31,7 +31,8 @@ export function resolveReceivableStatus(method: PaymentMethod): ReceivableStatus
 
 export function computeTotal(subtotal: string, discountPercent: string): string {
   const subtotalCents = parseCents(subtotal);
-  const totalCents = Math.floor((subtotalCents * (DECIMAL_SCALE - Number(discountPercent))) / DECIMAL_SCALE);
+  const remainingPercent = DECIMAL_SCALE - Number(discountPercent);
+  const totalCents = Math.floor((subtotalCents * remainingPercent) / DECIMAL_SCALE);
   return formatCents(totalCents);
 }
 
