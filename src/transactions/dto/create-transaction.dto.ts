@@ -7,6 +7,16 @@
  * (`forbidNonWhitelisted: true` in `src/main.ts`). The card number is
  * accepted in full here — masking to last-4 happens at the service layer
  * (future TODO) via `maskCardNumber` (`src/common/utils/card-number.util.ts`).
+ *
+ * AI-agent guidance: the TODO-04 controller binds this class as its parsed
+ * request body; invalid payloads then answer **400** through the existing
+ * global ValidationPipe (`@ApiProperty` metadata feeds Swagger at that
+ * moment — neither is rendered today). Wire value invariants encoded below:
+ * `method` = `PaymentMethod` strings, all numeric data (`value`,
+ * `cardNumber`, `cardCvv`) = strings, `cardExpirationDate` = `MM/YY`
+ * end-of-month future validity. Expiration example `"04/28"` is a still
+ * FUTURE date — keep every expiration example (here and in the response
+ * DTOs) future-dated when refreshing (it fails validation from 2028-05-01).
  */
 import { ApiProperty } from '@nestjs/swagger';
 import { IsEnum, IsNotEmpty, IsString, Matches, MaxLength } from 'class-validator';

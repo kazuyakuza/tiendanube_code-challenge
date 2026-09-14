@@ -6,6 +6,13 @@
  *
  * Fee rules (brief §3.2 USER DECISION): `discount` is the fee PERCENTAGE as
  * a string ("2" debit / "4" credit); `total = subtotal × (1 − discount/100)`.
+ *
+ * AI-agent guidance: TODO-04 nests this class in
+ * `CreateTransactionResponseDto.receivable`; Swagger renders it only once
+ * the controller exists. Wire value invariants: all amounts (`subtotal`,
+ * `discount`, `total`) and ids are STRINGS, `status` carries
+ * `ReceivableStatus` values — the business computations stay in the
+ * service, never in this output contract.
  */
 import { ApiProperty } from '@nestjs/swagger';
 import { ReceivableStatus } from '../../common/enums/receivable-status.enum';

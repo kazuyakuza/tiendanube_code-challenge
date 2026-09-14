@@ -4,17 +4,43 @@
 
 ## Current Work Focus
 
-TODO-02 "Project Foundation" (`.agent/todos/20260913/20260913-todo-2.md`):
-**all five tasks implemented** on branch `feat/project-foundation`; **only
-Critical Workflow step 5 (merge to `main` + push) is pending**. T1 (§1
-scaffold), T2 (§2 validated configuration), T3 (§3 hardened `main.ts`
-bootstrap), T4 (§4 unversioned `HEAD /health/ping`) and T5 (§5 global
-API-key guard + `@Public()` + Swagger security scheme) are coded and
-committed. TODO-file bookkeeping: tasks 1–4 already carry `[DONE]`; §5
-awaits T5's 4.5b verification and 4.6 `[DONE]` mark, which precede the step
-5 merge.
+TODO-03 "Transaction DTOs & Request Validation"
+(`.agent/todos/20260913/20260913-todo-3.md`; internally titled "TODO 02" —
+the filename is authoritative): consolidated cycle "TD" (Tasks 1–4) on
+branch `feat/transaction-dtos`, **steps 4.1b–4.4 complete** (implementation,
+review fix, documentation). Delivered the **contract layer** for
+`POST /v1/transactions`: request/response DTOs, two custom validators,
+shared enums, fee-percent constants, `maskCardNumber` and
+`TRANSACTIONS_RETURN_BODY` plumbing. Deliberately contract-only per TODO §6:
+no module/controller/service — the endpoint **still 404s**, Swagger `/docs`
+still shows only the health probe, and the env flag has no runtime consumer
+until TODO-04. Build + lint green. Remaining in this workflow: 4.5b
+plan-adherence, 4.6 `[DONE]` marks, step 5 merge. (TODO-02 closed earlier:
+merged to `main` at `d5abceb`, pushed.)
 
 ## Recent Changes
+
+- 2026-09-13: TODO-03 cycle TD — transaction DTO & validation contract
+  layer (branch `feat/transaction-dtos`; 4.2 commits e73ed43 enums,
+  1187b14 `maskCardNumber`, 0718237 custom validators, cfdaf77
+  `CreateTransactionDto`, e486a64 response DTOs, 80907e5 env plumbing,
+  5af8d3b structure map; 4.3 fix 709835a — public test PAN
+  `4111111111111111` request example + matching `'1111'` response example).
+  New: `src/common/enums/` (`PaymentMethod`, `ReceivableStatus`),
+  `src/common/constants/payment-fee.constants.ts` ("2"/"4" percent
+  strings), `src/common/utils/card-number.util.ts`,
+  `src/transactions/dto/` request DTO + 3 output-only response DTOs +
+  `validators/` (`IsPositiveDecimalString`, `IsFutureExpirationDate` —
+  MM/YY end-of-month UTC future validity). `TRANSACTIONS_RETURN_BODY`
+  added as optional boolean env (default `true`; `false` ⇒ future bare
+  `201 CREATED`), mirroring `SWAGGER_ENABLED` — plumbing only, TODO-04
+  owns the consumer. 4.3 review adjudication: docker-scripts /
+  `health.controller.ts` findings REJECTED (pre-existing user edits
+  checkpointed in step 2 — `30001` in the health curl JSDoc remains a
+  flagged user typo, not workflow scope); simplification NONE. 4.4 docs:
+  JSDoc headers on every new file, new "DTO & validation layer (TODO-03)"
+  section in `docs/app-setup.md`, architecture/context updates. **Not**
+  created (TODO §6): module/controller/service, tests, endpoint wiring.
 
 - 2026-09-13: Global API-key guard (T5 of TODO-02, commit 4ac069f):
   `ApiKeyGuard` (`src/common/guards/api-key.guard.ts`) registered app-wide
@@ -105,18 +131,20 @@ awaits T5's 4.5b verification and 4.6 `[DONE]` mark, which precede the step
 
 ## Immediate Next Steps
 
-1. T5 closeout (this workflow): step 4.5b plan-adherence verification, then
-   step 4.6 `[DONE]` mark for §5 of the TODO file.
-2. Critical Workflow step 5 (TODO-02 completion): rename
-   `.agent/todos/20260913/20260913-todo-2.md` with the `-DONE` suffix,
-   merge `feat/project-foundation` into `main`, delete the feature branch,
+1. TODO-03 cycle TD closeout (this workflow): step 4.5b plan-adherence
+   verification, then 4.6 `[DONE]` marks for §§1–4 of
+   `20260913-todo-3.md` and the 4.3 review/plans bookkeeping.
+2. Critical Workflow step 5 (TODO-03 completion): rename
+   `.agent/todos/20260913/20260913-todo-3.md` with the `-DONE` suffix,
+   merge `feat/transaction-dtos` into `main`, delete the feature branch,
    push `main` to `origin` only.
-3. Later features (future TODOs, NOT this workflow): transactions/receivables
-   orchestration — their `/v1` routes are protected by the now-global
-   `ApiKeyGuard` automatically (public only with `@Public()`) — Numerator CAS
-   client (`ConfigKeys.NumeratorApiUrl`), json-server client
-   (`ConfigKeys.JsonServerUrl`), unit + e2e test suites (see `brief.md` §3).
-4. User-owned future TODO files `.agent/todos/20260913/20260913-todo-3.md`
-   and `.agent/todos/20260913/20260913-todo-4.md` exist **UNTRACKED** —
-   kept out of this workflow and its commits, the user owns them; they are
-   not our next steps.
+3. TODO-04 (`20260913-todo-4.md`): transactions module/controller/service —
+   makes `POST /v1/transactions` reachable (the TODO-03 DTO contract then
+   answers **400** on invalid payloads via the global `ValidationPipe` and
+   renders in Swagger `/docs`), wires the Numerator CAS + json-server clients,
+   ID generation, fee math, masking on the write path, and becomes the first
+   runtime consumer of `TRANSACTIONS_RETURN_BODY`.
+4. User-owned future TODO files `.agent/todos/20260913/20260913-todo-4.md`
+   and `.agent/todos/20260913/20260913-todo-5.md` exist **UNTRACKED** — kept
+   out of this workflow and its commits, the user owns them.
+   (`todo-3.md` itself is committed — `d70f5df`, workflow step 2.)

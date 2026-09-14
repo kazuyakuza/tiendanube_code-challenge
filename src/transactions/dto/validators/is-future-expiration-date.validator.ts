@@ -6,6 +6,13 @@
  * expiration month, so the check is a timezone-free UTC calendar comparison
  * `expiration (month, year) >= current (month, year)`. `"04/28"` is valid
  * through 30 Apr 2028. Impossible months (`"13/28"`, `"00/28"`) are rejected.
+ *
+ * AI-agent guidance: applied to `CreateTransactionDto.cardExpirationDate`
+ * alongside the `@Matches(/^\d{2}\/\d{2}$/)` format guard (this validator
+ * also re-checks the format, so it is safe standalone). Wire value invariant:
+ * the date travels as an `MM/YY` STRING and YY is always 20YY. The `"04/28"`
+ * examples here and on the DTOs stop passing this validator on 2028-05-01 —
+ * refresh every expiration example at once when that happens.
  */
 import {
   ValidationArguments,
@@ -26,6 +33,7 @@ interface ParsedExpirationDate {
 
 @ValidatorConstraint({ name: 'IsFutureExpirationDate', async: false })
 export class IsFutureExpirationDateConstraint implements ValidatorConstraintInterface {
+  /** Accepts an `MM/YY` string not earlier than the current UTC month; rejects anything else, including non-strings. */
   validate(rawValue: unknown): boolean {
     if (typeof rawValue !== 'string') {
       return false;
@@ -33,6 +41,12 @@ export class IsFutureExpirationDateConstraint implements ValidatorConstraintInte
     return isNotExpiredExpirationDate(rawValue);
   }
 
+  /**
+   * Rejection message (no i18n key — the literal text is the message):
+   * `<property> must be a valid MM/YY date that has not expired (e.g. "04/28")`.
+   * @param validationArguments class-validator context; supplies the property name.
+   * @returns the message string shown in the 400 `message[]` once the route exists (TODO-04).
+   */
   defaultMessage(validationArguments: ValidationArguments): string {
     return `${validationArguments.property} must be a valid MM/YY date that has not expired (e.g. "04/28")`;
   }
@@ -73,6 +87,12 @@ function isCurrentOrFutureMonth(expirationMonth: number, expirationYear: number)
   return expirationMonth >= currentMonth;
 }
 
+/**
+ * Property decorator applying {@link IsFutureExpirationDateConstraint}.
+ * @param validationOptions class-validator overrides passed to `registerDecorator`.
+ * @returns a property decorator; usage example: `@IsFutureExpirationDate()`
+ * on `CreateTransactionDto.cardExpirationDate`.
+ */
 export function IsFutureExpirationDate(validationOptions?: ValidationOptions): PropertyDecorator {
   return (object: object, propertyName: string | symbol) => {
     registerDecorator({

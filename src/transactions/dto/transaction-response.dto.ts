@@ -5,6 +5,12 @@
  *
  * `cardNumber` is ALWAYS the masked form (last 4 digits); `cardCvv` is
  * returned as received (challenge sample keeps it — TODO §2.1 note).
+ *
+ * AI-agent guidance: TODO-04 nests this class in
+ * `CreateTransactionResponseDto.transaction`; Swagger renders it only once
+ * the controller exists — today `/docs` still lists just the health probe.
+ * Wire value invariants: every money/id/card field is a string and
+ * `cardNumber` carries the 4-digit `maskCardNumber` output, never a PAN.
  */
 import { ApiProperty } from '@nestjs/swagger';
 import { PaymentMethod } from '../../common/enums/payment-method.enum';

@@ -8,7 +8,11 @@ versioning and a gated Swagger UI at `/docs` — the public unversioned
 health probe of TODO-02 §4, `HEAD /health/ping`, and the global API-key
 guard of TODO-02 §5: every NestJS-routed endpoint must send the `x-api-key`
 header (missing or wrong → **401**), with `HEAD /health/ping` exempt via
-`@Public()`. See [API behavior at this stage](#api-behavior-at-this-stage)
+`@Public()` — plus the TODO-03 contract layer for `POST /v1/transactions`
+(request/response DTOs, custom validators, shared enums/constants and the
+card-masking helper: compiled, **not yet wired to a route** — see
+[DTO & validation layer (TODO-03)](#dto--validation-layer-todo-03)).
+See [API behavior at this stage](#api-behavior-at-this-stage)
 and [Plan references](#plan-references).
 
 ## Table of Contents
@@ -20,6 +24,7 @@ and [Plan references](#plan-references).
 - [Environment configuration](#environment-configuration)
 - [Run modes](#run-modes)
 - [API behavior at this stage](#api-behavior-at-this-stage)
+- [DTO & validation layer (TODO-03)](#dto--validation-layer-todo-03)
 - [Verify](#verify)
 - [npm scripts](#npm-scripts)
 - [Plan references](#plan-references)
@@ -66,7 +71,8 @@ cp .env.example .env
 `.env` is gitignored (local only); `.env.example` is the only committed env
 file and carries only placeholder/example values (see its comments for each
 key: `NODE_ENV`, `PORT`, `NUMERATOR_API_URL`, `JSON_SERVER_URL`, `API_KEY`,
-`SWAGGER_ENABLED`, and the optional `CORS_ORIGINS` note).
+`SWAGGER_ENABLED`, and the optional `CORS_ORIGINS` and
+`TRANSACTIONS_RETURN_BODY` notes).
 
 **Current-phase truth:** the app loads and validates `.env` at startup and now
 **consumes** it. The global `ConfigModule` (TODO-02 §2, implemented) reads
@@ -115,7 +121,10 @@ the morgan log format), `CORS_ORIGINS` (CORS allowlist; absent ⇒ allow all)
 and `SWAGGER_ENABLED` (mounts `/docs` or not; absent ⇒ enabled); the global
 `ApiKeyGuard` (TODO-02 §5, implemented) checks `API_KEY` on every request.
 Still validated but **not yet consumed**: the two service URLs
-(external-service clients of later TODOs).
+(external-service clients of later TODOs) and `TRANSACTIONS_RETURN_BODY`
+(TODO-03 §2.4 plumbing only — the TODO-04 transactions controller is its
+first runtime consumer; see
+[DTO & validation layer (TODO-03)](#dto--validation-layer-todo-03)).
 
 ## Run modes
 
@@ -276,6 +285,99 @@ requirement applies to the whole document, the public health probe also
 renders a padlock in the UI — that badge is Swagger chrome only; the
 endpoint itself stays guard-exempt.
 
+## DTO & validation layer (TODO-03)
+
+TODO-03 delivered the complete **contract** of `POST /v1/transactions`: the
+classes that declare what the endpoint will accept and return. Per TODO-03
+§6 this is contract-only work — **no controller, module, service, business
+logic or tests were created**. Consequences an agent must know today:
+
+- `POST /v1/transactions` is still **not reachable** — it **404s** like every
+  other non-health route (see
+  [API behavior at this stage](#api-behavior-at-this-stage)).
+- Swagger `/docs` still lists **only the health probe**; the DTOs carry full
+  `@ApiProperty` metadata but nothing renders it until TODO-04 declares the
+  endpoint.
+- `TRANSACTIONS_RETURN_BODY` has **no runtime consumer yet** (toggle contract
+  below).
+
+| Artifact (paths under `src/`) | Role |
+|-------------------------------|------|
+| `transactions/dto/create-transaction.dto.ts` — `CreateTransactionDto` | Request body contract: all 7 fields required (rules below) |
+| `transactions/dto/transaction-response.dto.ts` — `TransactionResponseDto` | Output shape of the `transaction` resource (masked card, string amounts) |
+| `transactions/dto/receivable-response.dto.ts` — `ReceivableResponseDto` | Output shape of the `receivable` resource (json-server wire naming: `transaction_id`, `create_date`, …) |
+| `transactions/dto/create-transaction-response.dto.ts` — `CreateTransactionResponseDto` | 201 envelope `{ transaction, receivable }`; documents the `TRANSACTIONS_RETURN_BODY` gate |
+| `transactions/dto/validators/` | Custom constraints `IsPositiveDecimalString` and `IsFutureExpirationDate` (exact reject messages in their JSDoc) |
+| `common/enums/` | `PaymentMethod` (`debit_card`/`credit_card`), `ReceivableStatus` (`paid`/`waiting_funds`) — string values **are** the wire values |
+| `common/constants/payment-fee.constants.ts` | `PAYMENT_FEE_PERCENTAGES`: debit `"2"`, credit `"4"` — fee **percentage strings**, not amounts |
+| `common/utils/card-number.util.ts` | `maskCardNumber()`: pure last-4-digits helper |
+
+### What the contract guarantees (once the route is wired in TODO-04)
+
+`CreateTransactionDto` field rules — invalid payloads are rejected with
+**400** by the *existing* global `ValidationPipe`
+(`whitelist`/`forbidNonWhitelisted`/`transform` in `src/main.ts`);
+**unknown properties are rejected too** (same pipe, `forbidNonWhitelisted` —
+no per-DTO option). Nothing new was added to the pipe in TODO-03.
+
+- `value` — decimal string, strictly positive, at most 2 decimals (`"0"` /
+  `"0.00"` rejected).
+- `description` — non-empty string, ≤ 200 chars.
+- `method` — exactly `"debit_card"` or `"credit_card"` (`PaymentMethod`).
+- `cardNumber` — digits-only string, 13–19 chars (the **full** PAN, on
+  purpose — see masking policy).
+- `cardHolderName` — non-empty string, ≤ 100 chars.
+- `cardExpirationDate` — `MM/YY` string that has not expired: valid from the
+  first through the **last day** of the expiration month, timezone-free UTC
+  comparison (`"04/28"` is accepted until 30 Apr 2028); impossible months
+  (`"13/28"`) rejected.
+- `cardCvv` — digits-only string, 3–4 chars.
+
+Wire-format invariants the response DTOs encode: every monetary field
+(`value`, `subtotal`, `discount`, `total`) and every id is a **string**;
+`discount` is the fee **percentage as string**; `cardNumber` is the masked
+**last 4 digits**. Response DTOs are output-only — zero `class-validator`
+decorators by design (TODO-03 §2.3).
+
+Maintenance note: Swagger/validation examples must stay **future-dated** —
+the `cardExpirationDate` example `"04/28"` (request + response DTOs) stops
+passing the validator on 2028-05-01; refresh all expiration examples at once
+(G6 also sanctioned `"09/29"`-style dates for new prose).
+
+### Masking policy
+
+The request DTO **accepts the full card number** — that is what the client
+sends. The last-4-only rule is an output/persistence invariant: the future
+TODO-04 service layer truncates with `maskCardNumber()`
+(`src/common/utils/card-number.util.ts`) before storing to json-server and
+answering; nothing stores or returns the full PAN. The helper is already in
+the repo but is **not called by anything yet**.
+
+### Envelope switch (`TRANSACTIONS_RETURN_BODY`)
+
+Optional boolean env var, default `true`, mirroring the `SWAGGER_ENABLED`
+pattern (schema + `ConfigKeys.TransactionsReturnBody` + `.env.example`; the
+env table above has its row). The toggled behavior belongs to the TODO-04
+controller: `true` ⇒ 201 with the full `{ transaction, receivable }` body,
+`false` ⇒ bare `201 CREATED`. **Setting it today has no observable effect** —
+TODO-03 ships plumbing only (user-approved global-plan §5 resolution).
+
+### Verifying the contract today
+
+Runtime exercises (curl against the endpoint, Swagger rendering, validator
+REPL checks) are TODO-04 scope — out of scope for this cycle (TODO-03 §6:
+no tests). The current green signal for the layer is that it compiles and
+lints as part of the app:
+
+```bash
+npm run build   # exit 0 → DTOs, validators, enums, constants and helper compile & are importable
+npm run lint    # exit 0
+```
+
+Each new file's JSDoc header records its purpose, TODO-03 section, exact
+validator semantics/messages and its next consumers (TODO-04
+controller/service/specs).
+
 ## Verify
 
 With the app running, check the behavior described in
@@ -361,6 +463,13 @@ of scope for TODO-02 and arrive in later work.
 - T1 source TODO: [`.agent/todos/20260913/20260913-todo-2.md`](../.agent/todos/20260913/20260913-todo-2.md) §1;
   T2 source TODO: same file §2; T3 source TODO: same file §3;
   T4 source TODO: same file §4; T5 source TODO: same file §5
+- TODO-03 global plan (cycle TD, binding decisions G1–G11 + §5 env-flag
+  resolution):
+  [`.kilo/plans/20260913-todo-3-transaction-dtos.md`](../.kilo/plans/20260913-todo-3-transaction-dtos.md);
+  cycle TD implementation plan:
+  [`.kilo/plans/20260913-todo-3-transaction-dtos-impl.md`](../.kilo/plans/20260913-todo-3-transaction-dtos-impl.md);
+  source TODO: [`.agent/todos/20260913/20260913-todo-3.md`](../.agent/todos/20260913/20260913-todo-3.md)
+  §§ Task 1–4
 
 ## Related docs
 

@@ -73,6 +73,23 @@
 > verification used a throwaway route, T5 plan §10). `common/filters/` and
 > `common/interceptors/` remain **planned**; the first real `/v1` protected
 > routes arrive in later TODOs. Details: `docs/app-setup.md`.
+>
+> 2026-09-13 update (TODO-03, cycle TD): the `transactions/dto/` block is
+> now **implemented as contract-only** — `CreateTransactionDto` (+ custom
+> validators in `dto/validators/`), `TransactionResponseDto`,
+> `ReceivableResponseDto` and the `CreateTransactionResponseDto` envelope
+> compile but the Nest module/controller/service do **not** exist, so
+> `POST /v1/transactions` is still not reachable and Swagger `/docs` still
+> lists only the health probe (the DTOs render once TODO-04 wires the
+> endpoint). Under `common/`, `enums/` (PaymentMethod, ReceivableStatus),
+> `constants/` (payment-fee "2"/"4" percent strings) and `utils/`
+> (`maskCardNumber`, last 4) are now implemented; `fee-rules.ts` remains
+> planned — its fee percentages currently live in the constants file. In
+> "Request Data Flow" below, **step 2 is partially live**: the validation
+> classes exist but nothing executes them. `TRANSACTIONS_RETURN_BODY`
+> (§2.4) has validated plumbing (env schema + `ConfigKeys` +
+> `.env.example`), no runtime consumer until the TODO-04 controller.
+> Details: `docs/app-setup.md` ("DTO & validation layer").
 
 ## Modular NestJS Layout (target)
 
@@ -81,18 +98,21 @@ src/
 ├── config/                 # Validated environment config (implemented, T2)
 │   ├── config.keys.ts      # ConfigKeys: canonical env key names for ConfigService
 │   └── env.validation.ts   # class-validator schema + fail-fast validateEnv()
-├── common/                 # Cross-cutting concerns (guards/decorators implemented, T5)
+├── common/                 # Cross-cutting concerns (guards/decorators implemented, T5; enums/constants/utils implemented, TODO-03)
 │   ├── api-key.constants.ts # API_KEY_HEADER + Swagger scheme name (implemented, T5)
+│   ├── constants/          # payment-fee.constants.ts — fee percent strings "2"/"4" (implemented, TODO-03)
 │   ├── decorators/         # public.decorator.ts — @Public() + IS_PUBLIC_KEY (implemented, T5)
+│   ├── enums/              # payment-method.enum.ts + receivable-status.enum.ts — string wire values (implemented, TODO-03)
 │   ├── guards/             # api-key.guard.ts — global ApiKeyGuard, exact x-api-key match, 401 on missing/wrong (implemented, T5; registered via APP_GUARD from @nestjs/core)
 │   ├── filters/            # Global exception filter (structured errors) — planned
-│   └── interceptors/       # Logging/response conventions — planned
+│   ├── interceptors/       # Logging/response conventions — planned
+│   └── utils/              # card-number.util.ts — pure maskCardNumber last-4 helper (implemented, TODO-03; no runtime caller until TODO-04)
 ├── health/                 # HEAD /health/ping — public liveness probe (implemented, T4; @Public()-exempt since T5)
-├── transactions/           # Main orchestration module
-│   ├── dto/                # CreateTransactionRequest, response DTOs
-│   ├── transactions.controller.ts
-│   ├── transactions.service.ts
-│   └── fee-rules.ts        # debit/credit fee map + date/status policy
+├── transactions/           # Main orchestration module — contract layer only so far (TODO-03)
+│   ├── dto/                # CreateTransactionDto + validators/ + 3 response DTOs incl. { transaction, receivable } envelope (implemented, TODO-03; not reachable from any route yet)
+│   ├── transactions.controller.ts # planned (TODO-04)
+│   ├── transactions.service.ts    # planned (TODO-04; first caller of maskCardNumber + fee constants)
+│   └── fee-rules.ts        # debit/credit fee map + date/status policy — planned; percentages in common/constants/ meanwhile
 ├── numerator/              # Numerator API client + CAS retry logic
 ├── json-server/            # json-server HTTP client (transactions/receivables)
 ├── main.ts                 # Bootstrap: helmet, CORS, morgan, versioning, Swagger (API-Key scheme since T5)
@@ -104,6 +124,9 @@ src/
 1. **Guard**: `ApiKeyGuard` validates `x-api-key` (health stays public).
 2. **Validation**: DTO pipes validate payload (value, description, method,
    cardNumber, cardHolderName, cardExpirationDate MM/YY, cardCvv).
+   *Status (TODO-03): partially live — the validation classes exist and
+   compile, but there is **no route yet**, so no request ever reaches them;
+   steps 1–7 run as a flow only once TODO-04 registers the controller.*
 3. **ID reservation**: `NumeratorService` obtains TWO unique IDs via
    `PUT /numerator/test-and-set` BEFORE any write (no orphan records).
 4. **Create transaction**: `JsonServerService` POSTs to `json-server/transactions`
