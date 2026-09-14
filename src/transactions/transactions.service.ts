@@ -5,15 +5,16 @@
  * into a persisted transaction + receivable pair, in the strict 9-step flow
  * of TODO §Task 2 (both Numerator ids reserved BEFORE any write).
  *
- * Error behaviour (TODO §Task 5, T5-G8): NO try/catch — failures of
- * `getNextId()` or of either json-server write propagate untouched to
- * `TransactionsController`, where they currently surface as the NestJS
- * default 500: the structured 502/503 mapping of the TODO §2.1 error
- * table lands with the TODO-06 Cycle-B global exception filter. A
- * transaction persisted but a receivable that fails leaves a PARTIALLY
- * WRITTEN state; accepted at this commit — compensation lands with
- * TODO-06 Cycle B (same branch, pending). The caller must see the raw
- * failure.
+ * Error behaviour (TODO-06 §Task 2, cycle B): failures of `getNextId()` or
+ * of the transaction write propagate untouched to the global
+ * `AllExceptionsFilter` (APP_FILTER), which maps them per the §2.1 table
+ * (Numerator errors → 503; json-server unknown/5xx → 503, 4xx → 502). The
+ * ONLY try/catch wraps `createReceivable`: if it fails after the
+ * transaction was persisted, the orphaned transaction is deleted by
+ * `TransactionCompensationService` (bounded retries; goal = REDUCE orphans)
+ * and the ORIGINAL receivable error is rethrown for the filter to map.
+ * If compensation also fails, the inconsistency is logged (ids + reason
+ * only) and the client still receives the error.
  *
  * Logging (T5-G10): one debug line on success carrying ONLY the two numeric
  * string ids — never the payload (card data) and never amounts.
@@ -42,6 +43,8 @@ import {
 } from '../json-server/interfaces/create-transaction-payload.interface';
 import { CreateTransactionDto } from './dto/create-transaction.dto';
 import { CreateTransactionResponseDto } from './dto/create-transaction-response.dto';
+import { ReceivableResponseDto } from './dto/receivable-response.dto';
+import { TransactionCompensationService } from './transaction-compensation.service';
 import {
   formatDateDDMMYYYY,
   computeTotal,
@@ -66,6 +69,7 @@ export class TransactionsService {
     private readonly numeratorService: NumeratorService,
     private readonly jsonServerService: JsonServerService,
     private readonly configService: ConfigService,
+    private readonly compensationService: TransactionCompensationService,
   ) {}
 
   async create(dto: CreateTransactionDto): Promise<CreateTransactionResponseDto | undefined> {
@@ -73,9 +77,15 @@ export class TransactionsService {
     const transactionResult = await this.jsonServerService.createTransaction(
       this.buildTransactionPayload({ dto, transactionId: ids.transactionId }),
     );
-    const receivableResult = await this.jsonServerService.createReceivable(
-      this.buildReceivablePayload({ dto, receivableId: ids.receivableId, transactionId: ids.transactionId }),
-    );
+    let receivableResult: ReceivableResponseDto;
+    try {
+      receivableResult = await this.jsonServerService.createReceivable(
+        this.buildReceivablePayload({ dto, receivableId: ids.receivableId, transactionId: ids.transactionId }),
+      );
+    } catch (error) {
+      await this.compensateOrphanedTransaction(ids.transactionId, error);
+      throw error;
+    }
     this.logger.debug(`transaction ${ids.transactionId} + receivable ${ids.receivableId} created`);
     if (!this.shouldReturnBody()) {
       return undefined;
@@ -90,6 +100,30 @@ export class TransactionsService {
     const transactionId = await this.numeratorService.getNextId();
     const receivableId = await this.numeratorService.getNextId();
     return { transactionId, receivableId };
+  }
+
+  /**
+   * Partial-failure compensation call-site (TODO-06 §Task 2.2, G5/CB-D6):
+   * the transaction row already exists, so ANY receivable-write failure
+   * triggers a bounded orphan-DELETE; the ORIGINAL error is then rethrown by
+   * the caller so the exception filter's §2.1 mapping is unchanged.
+   * `deleteTransaction` never throws (CB-D4 contract) and never masks the
+   * receivable error; when the orphan survives, one inconsistency line with
+   * ids + reason ONLY is logged (privacy T2-D7/G5).
+   */
+  private async compensateOrphanedTransaction(
+    transactionId: string,
+    receivableError: unknown,
+  ): Promise<void> {
+    const deleted = await this.compensationService.deleteTransaction(transactionId);
+    if (!deleted) {
+      const reason = receivableError instanceof Error
+        ? receivableError.message
+        : String(receivableError);
+      this.logger.error(
+        `orphaned transaction ${transactionId} could not be deleted — receivable failure: ${reason}`,
+      );
+    }
   }
 
   private buildTransactionPayload(context: BuildTransactionPayloadContext): CreateTransactionPayload {
