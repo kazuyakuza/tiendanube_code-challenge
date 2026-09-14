@@ -1,17 +1,20 @@
 /**
  * Request body of `POST /v1/transactions` (TODO-03 §1).
  *
- * The client sends raw transaction data; the API generates `id` (Numerator,
- * future TODO) and creates the receivable. Every field is required; unknown
- * properties are rejected by the global ValidationPipe
+ * The client sends raw transaction data; the API generates `id` via the
+ * Numerator client and creates the receivable — wired since TODO-05 by
+ * `TransactionsService.create` (`src/transactions/transactions.service.ts`;
+ * still no route reaches it — controller TODO pending). Every field is
+ * required; unknown properties are rejected by the global ValidationPipe
  * (`forbidNonWhitelisted: true` in `src/main.ts`). The card number is
  * accepted in full here — masking to last-4 happens at the service layer
- * (future TODO) via `maskCardNumber` (`src/common/utils/card-number.util.ts`).
+ * (implemented: `TransactionsService.buildTransactionPayload`) via
+ * `maskCardNumber` (`src/common/utils/card-number.util.ts`).
  *
- * AI-agent guidance: the TODO-04 controller binds this class as its parsed
- * request body; invalid payloads then answer **400** through the existing
- * global ValidationPipe (`@ApiProperty` metadata feeds Swagger at that
- * moment — neither is rendered today). Wire value invariants encoded below:
+ * AI-agent guidance: the still-pending controller TODO binds this class as
+ * its parsed request body; invalid payloads will then answer **400**
+ * through the existing global ValidationPipe (`@ApiProperty` metadata feeds
+ * Swagger at that moment — neither is rendered today). Wire value invariants encoded below:
  * `method` = `PaymentMethod` strings, all numeric data (`value`,
  * `cardNumber`, `cardCvv`) = strings, `cardExpirationDate` = `MM/YY`
  * end-of-month future validity. Expiration example `"04/28"` is a still

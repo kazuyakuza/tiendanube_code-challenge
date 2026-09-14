@@ -7,8 +7,9 @@
  *
  * AI-agent guidance: wire value invariant — `ReceivableResponseDto.status`
  * serializes to these strings. The debit→`paid` / credit→`waiting_funds`
- * mapping itself is business logic owned by TODO-04, which is this enum's
- * next consumer.
+ * mapping is business logic implemented since TODO-05 in
+ * `resolveReceivableStatus` (`src/transactions/fee-rules.ts`), called by
+ * `TransactionsService` — this enum's first business consumer.
  */
 export enum ReceivableStatus {
   PAID = 'paid',

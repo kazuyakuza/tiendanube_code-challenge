@@ -7,7 +7,9 @@
  *
  * AI-agent guidance: wire value invariant — `value` travels as a STRING;
  * applied to `CreateTransactionDto.value` today, reachable through HTTP
- * only once the TODO-04 controller binds that DTO. Exact error semantics are
+ * only once the controller TODO binds that DTO (the TODO-05 service does
+ * not re-validate — the global `ValidationPipe` owns this rule). Exact
+ * error semantics are
  * on `IsPositiveDecimalStringConstraint` below.
  */
 import {

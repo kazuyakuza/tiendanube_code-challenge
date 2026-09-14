@@ -9,8 +9,9 @@
  * AI-agent guidance: wire value invariant — the stored/returned
  * `cardNumber` is ALWAYS the 4-digit result of this function (last 4
  * digits), never the full PAN; the request DTO accepts the number in full.
- * TODO-04: call this in the transaction service before persisting/responding;
- * unit tests arrive with the same TODO.
+ * WIRED since TODO-05: `TransactionsService.buildTransactionPayload` calls
+ * it on the write path before persisting. Unit tests are deferred to a
+ * later testing TODO (none exist for this helper yet).
  */
 const MASKED_DIGIT_COUNT = 4;
 

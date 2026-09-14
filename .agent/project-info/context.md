@@ -4,7 +4,26 @@
 
 ## Current Work Focus
 
-**TODO-04 CLOSED.** Merged `feat/external-clients` → `main` (`--no-ff`
+**WIP (in progress): TODO-05 transactions orchestration — service layer**
+(branch `feat/transaction-orchestration`; commits `1cd2a55`
+v0.4.0, `207f79c` → `759bb62` code, `7b2176c` 4.3 simplification hoist;
+build+lint green). `TransactionsModule` + `TransactionsService` +
+`fee-rules.ts` exist and ARE registered in `AppModule`; the
+strict `create(dto)` 9-step flow (two Numerator ids reserved before any
+write, masking on the write path, fee/status/date rules,
+`TRANSACTIONS_RETURN_BODY` gate — envelope or `undefined`) runs with zero
+try/catch (errors propagate raw; partial write accepted, TODO §Error).
+**User ruling Option B: there is NO `payment_date` anywhere — D+0/D+30
+settlement is carried purely by receivable `status` (see Recent Changes).**
+**External surface is UNCHANGED: `health` + `/docs` only — no controller or
+route invokes the service, so it is never executed in the running app and
+HTTP-visible behavior stays exactly as the previous cycle** (TODO §Out of
+scope). **4.5b adherence check + 4.6 completion marks remain open when this
+line was written.** **Remaining deferred work:** the controller TODO (binds
+`POST /v1/transactions` → wire the existing service), Swagger decorators,
+error→HTTP mapping (G18), compensation, and all tests.
+
+**Previous cycle — TODO-04 CLOSED.** Merged `feat/external-clients` → `main` (`--no-ff`
 merge commit `f0a979a`, build gate exit 0) and pushed to `origin`
 (`74988ee..f0a979a main -> main`) during step 5 (part 1) on 2026-09-14;
 feature branch deletion is the remaining part-2 cleanup. The completed task
@@ -38,14 +57,75 @@ tasks:
   `20260913-client-modules-registration-adherence.md`); 4.6 archive
   `8d397a3`.
 
-Both services are now injectable app-wide and construct at boot (config
-reads only); the app still performs **zero outbound HTTP** — no
-controller/orchestration endpoint calls them yet (explicitly next-TODO land,
-TODO §Out of scope). Global plan annotated with post-execution verification
+Both client services and now `TransactionsService` are injectable app-wide
+and construct at boot (config reads only); the app still performs **zero
+outbound HTTP** — with TODO-05 landed the first caller chain
+(endpoint → service → clients) exists in code and the service's `create()`
+is wired, but **no controller/route ever invokes it**, so nothing runs; that
+invocation is explicitly controller-TODO land (TODO-05 deliberately shipped
+service-only). Global plan annotated with post-execution verification
 notes (G12 forRoot→register, G15 zero-delta). TODO-03 and TODO-02
 were closed earlier (both merged to `main` and pushed).
 
 ## Recent Changes
+
+- 2026-09-14: TODO-05 cycle — **transaction orchestration service
+  (service layer only)** (branch `feat/transaction-orchestration`; global plan
+  `.kilo/plans/20260914-transaction-orchestration.md` T5-G1…G13 + impl plan
+  `...-impl.md` with §8 deviations D1–D6; TODO file
+  `20260913-todo-5.md` — **file-handle cycle number TODO-05** (its internal
+  "TODO 04" title names the orchestration task; external clients were
+  todo-4). Step 3 bump: `1cd2a55` → v`0.4.0`. **Task-parsing decision: the
+  five `## Task` sections + wiring ran as ONE merged 4.1–4.6 cycle** (user
+  approved — inseparable facets of the single service deliverable; the plan's
+  "extremely short/related" join clause, not five independent cycles).
+  4.2 commits: **`207f79c`** new `src/transactions/fee-rules.ts` (pure
+  `resolveReceivableStatus`, `computeTotal` — integer-cents math **truncated**
+  to exactly 2 decimals `floor(cents × remaining% / 100)`, never rounding;
+  `formatDateDDMMYYYY` local-now `DD/MM/YYYY`), **`759bb62`** new
+  `transactions.service.ts` (`TransactionsService.create(dto)` — TODO §Flow
+  9-step strict order: both `getNextId()` reservations before any write
+  (zero-orphan risk), `maskCardNumber` applied on the write path, fee data
+  = status + fee-% string discount + cents-truncated total + `create_date`,
+  strict transaction→receivable persistence, envelope-or-`undefined` return
+  gated service-level by `TRANSACTIONS_RETURN_BODY` via `get(key, true)`;
+  **zero try/catch — domain errors propagate raw; a failed second write
+  leaves an ACCEPTED partial-written state (TODO §Error)**; in-file
+  `ReservedIds`/payload-context param objects for the 2-params rule) +
+  `transactions.module.ts` (imports `NumeratorModule`+`JsonServerModule`,
+  provides + **exports** the service, **no controller/route**), `AppModule`
+  import + header-JSDoc refresh (the "NO business route" note stays TRUE).
+  4.3: code-reviewer = **NO FIX PLAN**; code-simplifier = **ONE worthwhile
+  change, applied in `7b2176c`** (`computeTotal` net-percent hoist,
+  behavior-identical, per `20260914-transaction-orchestration-simplify.md`);
+  other candidates rejected/logged. Verification: `npm run build` +
+  `npm run lint` exit 0 (T5-G11 gate). **User ruling Option-B (impl §8 D1):
+  NO `payment_date` field and NO add-days/D+30 computation anywhere** —
+  D+0/D+30 settlement is carried purely by receivable `status`
+  (`paid`/`waiting_funds`); `create_date` = local now `DD/MM/YYYY`;
+  TODO §Fee's payment-date line superseded. **T5-G13 frozen surfaces: ZERO
+  diffs to `src/numerator/`, `src/json-server/`, existing DTOs, enums,
+  validators, constants** (transport interfaces unchanged). Deviation
+  D3 kept: public return widened to `Promise<CreateTransactionResponseDto |
+  undefined>` (TODO §Task 1 literal signature superseded by D-DECISION/T5-G6).
+  **Runtime truth unchanged: still no controller ⇒ `POST /v1/transactions`
+  404s; app performs zero outbound HTTP calls; `TRANSACTIONS_RETURN_BODY` and
+  `maskCardNumber` moved plumbing/helper ⇒ gate/call-sites live but
+  unexercised from HTTP; Swagger `/docs` still health-only.** 4.4 docs step
+  (this bullet): JSDoc truth-sweep of frozen comment files (`config.keys.ts`,
+  `env.validation.ts`, `card-number.util.ts`, `payment-fee.constants.ts`,
+  both enums, all 4 DTO headers), `app.module.ts` verified truthful,
+  `docs/app-setup.md` new "Transactions orchestration service (TODO-05)"
+  section + TODO-03/env-table/consumed-now flips, real example table,
+  `docs/json-server-client.md` first-consumer flips,
+  `.agent/project-structure.md` transactions line, `architecture.md` dated
+  entry + tree lines + Request-Data-Flow step statuses (3–6 implemented at
+  service layer / 7 controller-pending), `tech.md` no content delta
+  (no new deps/env/commands). `app.module.ts` JSDoc + `AGENTS.md` untouched
+  by this 4.4 (already truthful). Out of scope honored: no controller, no
+  route, no Swagger decorators, no compensation/saga, no tests. **4.5b/4.6
+  were still open when this bullet was written.** Next runtime work: the
+  controller TODO (binds `POST /v1/transactions` → the existing `create()`).
 
 - 2026-09-14: TODO-04 cycle Task 3 — module registration (branch
   `feat/external-clients`; single 4.2 commit `7a4a149`). New
@@ -269,17 +349,23 @@ were closed earlier (both merged to `main` and pushed).
 
 ## Immediate Next Steps
 
-1. **Transactions-orchestration module** (next TODO cycle — `20260913-todo-5.md`,
-   `-todo-6.md` or `-todo-7.md`; user selects which) — makes
-   `POST /v1/transactions` reachable (the TODO-03 DTO contract then answers
-   **400** on invalid payloads via the global `ValidationPipe` and renders in
-   Swagger `/docs`), wires both clients (two IDs reserved before any write),
-   fee math, masking on the write path, maps the clients' domain errors to
-   HTTP responses (global plan G18) and becomes the first runtime consumer of
-   `TRANSACTIONS_RETURN_BODY`. Both client services are injectable app-wide
-   since TODO-04 Task 3, so this module only needs to import
-   `NumeratorModule`/`JsonServerModule` when it lands.
-2. TODO-04 remnants closed: workflow step 5 part 1 done (merge `f0a979a`,
+1. **In-flight TODO-05 4.4→4.6 (current workflow step):** after this docs
+   commit, close the cycle with 4.5b adherence check and 4.6 `[DONE]`
+   marks / final commits on `20260913-todo-5.md` — per the global plan.
+2. **Transactions CONTROLLER TODO (next runtime cycle — user picks the task
+   file: `-todo-6.md`/`-todo-7.md` or new)** — registers the controller +
+   route `POST /v1/transactions` and binds `CreateTransactionDto` →
+   `TransactionsService.create(dto)` (the service is ALREADY implementable
+   since TODO-05); applies guard + Swagger `201` rendering; maps the raw
+   client/service errors to HTTP (global plan G18); finally decides the
+   compensation/saga for the accepted partial-write state; until then the
+   route 404s.
+3. **Deferred test TODO (separate cycle):** unit tests first (pure
+   `fee-rules.ts` ⇒ no DI; `TransactionsService` with mocked clients — verify the
+   9-step order, gate both `TRANSACTIONS_RETURN_BODY` states, masking
+   call-site), then e2e once the controller route exists — `passWithNoTests`
+   keeps the suite green until then.
+4. TODO-04 remnants closed: workflow step 5 part 1 done (merge `f0a979a`,
    push `origin`, checkpoint `03689fd` incl. `package.json` user edit +
    archived `20260913-todo-4-DONE.md` + backlog `todo-5/6/7.md` now tracked);
    part 2 = delete `feat/external-clients` post-verification + commit this

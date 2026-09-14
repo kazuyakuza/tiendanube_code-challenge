@@ -11,9 +11,10 @@
  * External clients (TODO-04 Task 3, G14): `NumeratorModule` and
  * `JsonServerModule` are registered here, making both services injectable
  * anywhere; each carries its own timeout-configured axios instance
- * (`HTTP_TIMEOUT_MS`). There is still NO business route/controller — the
- * clients perform zero outbound HTTP calls until the orchestration TODO
- * (later) wires them to an endpoint.
+ * (`HTTP_TIMEOUT_MS`). The orchestration service (`TransactionsModule`,
+ * TODO-05) orchestrates both clients but NO route/controller exists yet,
+ * so the clients still perform zero outbound HTTP calls until the
+ * controller TODO wires an endpoint.
  *
  * Security (TODO-02 §5): `ApiKeyGuard` is registered globally through the
  * `APP_GUARD` token, so every route requires the `x-api-key` header unless
@@ -27,6 +28,7 @@ import { validateEnv } from './config/env.validation';
 import { HealthModule } from './health/health.module';
 import { NumeratorModule } from './numerator/numerator.module';
 import { JsonServerModule } from './json-server/json-server.module';
+import { TransactionsModule } from './transactions/transactions.module';
 
 @Module({
   imports: [
@@ -38,6 +40,7 @@ import { JsonServerModule } from './json-server/json-server.module';
     HealthModule,
     NumeratorModule,
     JsonServerModule,
+    TransactionsModule,
   ],
   providers: [{ provide: APP_GUARD, useClass: ApiKeyGuard }],
 })

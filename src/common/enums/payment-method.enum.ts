@@ -8,8 +8,10 @@
  *
  * AI-agent guidance: wire value invariant — the serialized form is always
  * the enum member's string, never its name. Consumed by `CreateTransactionDto`
- * (`@IsEnum`) today; the TODO-04 controller/service and their specs are the
- * next consumers. Nothing here is reachable from an HTTP route yet.
+ * (`@IsEnum`) today; consumed since TODO-05 by the orchestration service
+ * (`TransactionsService` + `src/transactions/fee-rules.ts` — status/fee
+ * lookups keyed on this enum). Still no HTTP route reaches it: the
+ * controller arrives with the controller TODO.
  */
 export enum PaymentMethod {
   DEBIT_CARD = 'debit_card',
