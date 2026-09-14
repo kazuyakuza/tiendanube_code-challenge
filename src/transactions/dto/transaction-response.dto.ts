@@ -8,8 +8,9 @@
  *
  * AI-agent guidance: `TransactionsService.create` nests the echoed
  * transaction body in `CreateTransactionResponseDto.transaction` since
- * TODO-05; Swagger renders it only once the (still pending) controller
- * TODO exists — today `/docs` still lists just the health probe.
+ * TODO-05; since TODO-06 Cycle A it is rendered in Swagger `/docs` — the
+ * `TransactionsController` `@ApiCreatedResponse` schema on
+ * `POST /v1/transactions`.
  * Wire value invariants: every money/id/card field is a string and
  * `cardNumber` carries the 4-digit `maskCardNumber` output, never a PAN.
  */

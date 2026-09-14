@@ -10,22 +10,31 @@ guard of TODO-02 §5: every NestJS-routed endpoint must send the `x-api-key`
 header (missing or wrong → **401**), with `HEAD /health/ping` exempt via
 `@Public()` — plus the TODO-03 contract layer for `POST /v1/transactions`
 (request/response DTOs, custom validators, shared enums/constants and the
-card-masking helper — consumed since TODO-05 by the orchestration service,
-but still **not wired to any route** — see
-[DTO & validation layer (TODO-03)](#dto--validation-layer-todo-03)) — and the two
+card-masking helper — consumed since TODO-05 by the orchestration service
+and rendered on the live route since TODO-06 Cycle A, see
+[DTO & validation layer (TODO-03)](#dto--validation-layer-todo-03)) — the two
 external clients of TODO-04: the **Numerator client** (`src/numerator/`,
 Task 1) and the **json-server client** (`src/json-server/`, Task 2), both
-**registered in `AppModule` since Task 3** with the shared 4 s axios timeout;
-they boot with the app yet still perform no live traffic, because nothing
-reaches their first caller: the **TODO-05 orchestration service**
+**registered in `AppModule` since Task 3** with the shared 4 s axios
+timeout, and the **TODO-05 orchestration service**
 (`src/transactions/`: `TransactionsModule` + `TransactionsService` + pure
 `fee-rules.ts` — id reservation, masking, fee math and the
-`TRANSACTIONS_RETURN_BODY` gate) is **injectable only** — no
-controller/route exists yet, so it is never invoked at runtime and the app
-**still performs zero outbound HTTP calls** — see
-[Transactions orchestration service (TODO-05)](#transactions-orchestration-service-todo-05)
-and [External clients (TODO-04)](#external-clients-todo-04).
-See [API behavior at this stage](#api-behavior-at-this-stage)
+`TRANSACTIONS_RETURN_BODY` gate; see
+[Transactions orchestration service (TODO-05)](#transactions-orchestration-service-todo-05))
+— and, **live since TODO-06 Cycle A**, the thin `TransactionsController`,
+so the app now **performs outbound HTTP to the mock services exactly while
+`POST /v1/transactions` is invoked** (boot remains config reads only) and
+the endpoint's auth (401), validation (400) and success shapes (201
+envelope / bare 201) are externally observable. **Since TODO-06 Cycle B
+the error contract is complete**: the global `AllExceptionsFilter` answers
+every failure with the structured `{ statusCode, message, error }` body
+(Numerator → 503; json-server unknown/5xx → 503, 4xx → 502; unknown →
+generic 500), and a failed receivable write after the transaction was
+persisted is compensated by an orphan-DELETE retry loop
+(`TransactionCompensationService`). See
+[Transactions endpoint (TODO-06 Cycle A)](#transactions-endpoint-todo-06-cycle-a),
+[Error handling & compensation (TODO-06 Cycle B)](#error-handling--compensation-todo-06-cycle-b),
+[API behavior at this stage](#api-behavior-at-this-stage)
 and [Plan references](#plan-references).
 
 ## Table of Contents
@@ -40,6 +49,8 @@ and [Plan references](#plan-references).
 - [DTO & validation layer (TODO-03)](#dto--validation-layer-todo-03)
 - [External clients (TODO-04)](#external-clients-todo-04)
 - [Transactions orchestration service (TODO-05)](#transactions-orchestration-service-todo-05)
+- [Transactions endpoint (TODO-06 Cycle A)](#transactions-endpoint-todo-06-cycle-a)
+- [Error handling & compensation (TODO-06 Cycle B)](#error-handling--compensation-todo-06-cycle-b)
 - [Verify](#verify)
 - [npm scripts](#npm-scripts)
 - [Plan references](#plan-references)
@@ -64,16 +75,25 @@ docker compose up
 | json-server   | `http://localhost:8080` | Fake DB: transactions + receivables    |
 | Numerator API | `http://localhost:3000` | Sequential ID generation (mock)        |
 
-Status vs. the code (TODO-04 + TODO-05): **both clients exist, are wired** —
+Status vs. the code (TODO-04 + TODO-05 + both TODO-06 cycles): **both
+clients exist, are wired** —
 `src/numerator/` (Task 1) and `src/json-server/` (Task 2) are registered in
 `AppModule` (Task 3, commit `7a4a149`), each with its own timeout-configured
 axios instance, see
-[External clients (TODO-04)](#external-clients-todo-04) — and since TODO-05
-have a first caller (`TransactionsService`, see
-[Transactions orchestration service (TODO-05)](#transactions-orchestration-service-todo-05))
-— but that service is reachable from **no endpoint yet**, so the **running
-app still makes no outbound call to either service**. You can exercise the
-Numerator contract directly with the curl recipes in that section — no
+[External clients (TODO-04)](#external-clients-todo-04); their first and
+only caller is `TransactionsService` (TODO-05, see
+[Transactions orchestration service (TODO-05)](#transactions-orchestration-service-todo-05)),
+and since TODO-06 Cycle A that service is driven over HTTP by
+`TransactionsController` — so the **running app DOES call both services,
+exactly while `POST /v1/transactions` is invoked** (both mocks must be
+up via `docker compose up` for a successful create; boot itself still
+only reads config). Since TODO-06 Cycle B the app can additionally issue
+one `DELETE` against json-server during that same request — the orphan
+compensation of [Error handling & compensation
+(TODO-06 Cycle B)](#error-handling--compensation-todo-06-cycle-b), sent
+through the TransactionsModule's own `HttpModule` instance with ZERO diffs
+under `src/json-server/`). You can exercise the Numerator contract directly
+with the curl recipes in that section — no
 NestJS app involved (json-server wire-shape recipes:
 [json-server client guide](json-server-client.md)).
 
@@ -133,7 +153,7 @@ literal key strings (see `brief.md` §4.1 and global-plan decisions G4/G5).
 | `API_KEY`           | yes      | non-empty string                                     | Key the global `ApiKeyGuard` matches against `x-api-key` on every request (T5, active) | `your-secret-api-key-here` |
 | `SWAGGER_ENABLED`   | no       | `"true"` \| `"false"`, default `true`                | Swagger UI (`/docs`) on/off switch — consumed at bootstrap                 | `true`                     |
 | `CORS_ORIGINS`      | no       | comma-separated origins; absent/blank ⇒ allow all    | CORS allowlist — consumed by the `main.ts` bootstrap                       | `http://localhost:5173`    |
-| `TRANSACTIONS_RETURN_BODY` | no | `"true"` \| `"false"`, default `true`         | Gates the response envelope: service-level consumer `TransactionsService` reads it per `create()` via `get(key, true)` — `false` ⇒ the service returns `undefined` (TODO-05; implemented at the SERVICE layer). The route shape (bare `201 CREATED` vs full body on `POST /v1/transactions`, TODO-03 §2.4) still awaits the controller TODO, so the flag is **not yet observable over HTTP** | `true` |
+| `TRANSACTIONS_RETURN_BODY` | no | `"true"` \| `"false"`, default `true`         | Gates the response envelope: service-level consumer `TransactionsService` reads it per `create()` via `get(key, true)` — `false` ⇒ the service returns `undefined` (TODO-05; implemented at the SERVICE layer) and `TransactionsController` relays that result directly, so `true` ⇒ 201 + envelope, `false` ⇒ bare `201 CREATED` on `POST /v1/transactions` (TODO-06 Cycle A). **HTTP-observable today**; restart the app after changing it | `true` |
 | `MAX_RETRIES` | no | integer ≥ 1, default `10` (in-code, `src/numerator/numerator.constants.ts`) | **Total** CAS attempts per `NumeratorService.getNextId()` call — not extra retries (TODO-04 Task 1 §1.3) | `10` |
 | `NUMERATOR_BASE_BACKOFF_MS` | no | integer ≥ 1, default `20` (same file) | Base backoff for the conflict-retry sleep: `min(base × 2^retryIndex, 160 ms cap)` (TODO-04 Task 1 §1.3) | `20` |
 
@@ -159,14 +179,13 @@ and `SWAGGER_ENABLED` (mounts `/docs` or not; absent ⇒ enabled); the global
 `JsonServerService` (TODO-04 Task 2) resolves `JSON_SERVER_URL` via
 `getOrThrow` at construction; and `TransactionsService` (TODO-05) reads
 `TRANSACTIONS_RETURN_BODY` via `get(key, true)` on every `create()` call.
-**Boot state (since Task 3 + TODO-05):**
+**Boot state (since Task 3 + TODO-05 + TODO-06 Cycle A):**
 `NumeratorModule`, `JsonServerModule` and `TransactionsModule` are registered
 in `AppModule`, so all three services are constructed at startup and the
-clients' config reads execute then — but `create()` never runs (no route
-calls the orchestration service yet), so no outbound request is ever sent
-today and the return-body gate has no HTTP-observable effect until the
-controller TODO lands
-(see [Transactions orchestration service (TODO-05)](#transactions-orchestration-service-todo-05)).
+clients' config reads execute then; `create()` now runs whenever
+`POST /v1/transactions` is invoked, and **only** then do the clients send
+outbound requests — the return-body gate is HTTP-observable on that route
+(see [Transactions endpoint (TODO-06 Cycle A)](#transactions-endpoint-todo-06-cycle-a)).
 
 ## Run modes
 
@@ -190,30 +209,44 @@ With TODO-02 §3–§5 implemented, the HTTP surface behaves as follows
   It is **public** because the method-level `@Public()` decorator on
   `ping()` exempts it from the now-live global `ApiKeyGuard` (TODO-02 §5,
   T5) — without the decorator the guard would answer this route with `401`.
-- **Every other route 404s.** No business controllers are registered yet
-  (TODO-05 added the orchestration **service**, not a route —
-  `POST /v1/transactions` still 404s; see
-  [Transactions orchestration service (TODO-05)](#transactions-orchestration-service-todo-05)),
-  so any other path — `/`, `/v1/anything`, even `/v1/health/ping` — returns
-  the NestJS default 404 (a `GET` on `/health/ping` 404s too: the probe
-  answers `HEAD` alone). Guards run only on **matched** routes, so an
-  unknown path 404s *before* the API-key check ever happens. Business
-  routes from later TODOs will be served under `/v1/...` via URI versioning
-  (`defaultVersion: '1'`, deliberately **no** global prefix) — and they
-  arrive **protected** automatically: the global guard covers every route it
-  matches. The guard itself is live now, but no committed endpoint is
-  guard-protected today (the only registered route is the public probe and
-  per plan decision G10 no placeholder protected route was committed), so
-  `401` becomes observable from outside only once the first `/v1` route
-  lands in the next TODO. T5 proved the full 401/200 matrix with a
-  throwaway protected route that was deleted before committing (T5 plan
-  §10).
+- **`POST /v1/transactions` is LIVE** (TODO-06 Cycle A) — the first
+  business route, wiring `CreateTransactionDto` → `TransactionsService.create`.
+  On it the global `ApiKeyGuard` answers **401** for a missing/wrong
+  `x-api-key` header and the global `ValidationPipe` answers **400** for an
+  invalid payload; a valid call answers **201** with the
+  `{ transaction, receivable }` envelope — or a bare `201` (empty body)
+  when `TRANSACTIONS_RETURN_BODY=false`. Domain failures (Numerator /
+  json-server) answer with the mapped structured **503/502** bodies and a
+  failed second write first triggers orphan-DELETE compensation — since
+  **TODO-06 Cycle B** the global exception filter and compensation are
+  LIVE, so the TODO §2.1 error table is **fully effective**. Full contract,
+  knobs + fault-injection recipes:
+  [Error handling & compensation (TODO-06 Cycle B)](#error-handling--compensation-todo-06-cycle-b);
+  behavior + happy-path recipes:
+  [Transactions endpoint (TODO-06 Cycle A)](#transactions-endpoint-todo-06-cycle-a).
+- **Every still-unmatched route 404s** — any path other than the two live
+  ones (`HEAD /health/ping`, `POST /v1/transactions`): `/`, `/v1/anything`,
+  even `/v1/health/ping` return the NestJS 404 body — already the
+  structured `{ statusCode, message, error }` shape, passed through
+  verbatim by the Cycle-B filter (global plan G10). A `GET` on
+  `/health/ping` 404s too — the probe answers `HEAD` alone; likewise a
+  `GET`/`PUT`/`DELETE` on `/v1/transactions` — only `POST` is defined.
+  Guards run only on **matched** routes, so an unknown path 404s *before*
+  the API-key check ever happens. Routes from later TODOs are served under
+  `/v1/...` via URI versioning (`defaultVersion: '1'`, deliberately **no**
+  global prefix) — and they arrive **protected** automatically: the global
+  guard covers every route it matches. Unlike earlier stages, **401 is
+  externally observable today** on the transactions route (T5 had proven
+  the full 401/200 matrix with a throwaway protected route deleted before
+  committing, T5 plan §10).
 - **`/docs` is the one real page** (when Swagger is enabled, the default).
   Swagger serves itself outside the Nest router entirely, so versioning
   never prefixes it and the API-key guard never applies to it — the UI
   stays reachable without a key. The UI lists the health probe as a `head`
-  operation on `/health/ping` — deliberately left visible (T4 decision C) —
-  and now carries a working **Authorize** button (T5, TODO-02 §5.3): see
+  operation on `/health/ping` — deliberately left visible (T4 decision C)
+  — **plus, since TODO-06 Cycle A, the `POST /v1/transactions` operation**
+  with request/response schemas and the documented error responses; the
+  document carries a working **Authorize** button (T5, TODO-02 §5.3): see
   [Authorizing in Swagger UI](#authorizing-in-swagger-ui-x-api-key).
 - **Every response — including the health `200` and every 404 — carries helmet
   security headers**
@@ -240,11 +273,12 @@ outside it).
   never "simplify" it into a boolean return.
 - A duplicated `x-api-key` header only passes when its **first** value is
   the exact key.
-- No committed endpoint is guard-protected at this stage (only the public
-  probe is registered; G10 kept the verification placeholder route out of
-  the repo), so a live `401` appears the moment the first `/v1` route lands
-  in the next TODO. T5 verified the full matrix against a throwaway
-  protected route before teardown (T5 plan §10).
+- Since TODO-06 Cycle A, `POST /v1/transactions` is the first committed
+  **guard-protected** route (no `@Public()`, no `@UseGuards` — the global
+  `APP_GUARD` registration is the single enforcement, plan decision G1), so
+  a live `401` is externally observable today: send that POST without the
+  header. (T5 had verified the full matrix earlier against a throwaway
+  protected route, removed before committing, T5 plan §10 / G10.)
 
 Quick probes (PowerShell: `curl` aliases to `Invoke-WebRequest` — always use
 `curl.exe`):
@@ -256,12 +290,12 @@ curl.exe -s -o NUL -w "%{http_code}" http://localhost:3001/v1/health/ping   # 40
 curl.exe -s -o NUL -w "%{http_code}" http://localhost:3001/docs/   # 200 — Swagger UI is not a guarded route
 ```
 
-The request shape for the protected `/v1` routes of the next TODO — today
-they still 404, because no such route is committed yet:
+The request shape for the live protected `/v1` route (full endpoint guide +
+happy-path body: [Transactions endpoint (TODO-06 Cycle A)](#transactions-endpoint-todo-06-cycle-a)):
 
 ```powershell
-curl.exe -i http://localhost:3001/v1/<route>                                  # 401 once <route> exists (no key)
-curl.exe -i -H "x-api-key: <API_KEY value from your .env>" http://localhost:3001/v1/<route>   # passes the guard once <route> exists
+curl.exe -i -X POST http://localhost:3001/v1/transactions                                  # 401 (no key; 400 would follow without a valid body)
+curl.exe -i -X POST http://localhost:3001/v1/transactions -H "x-api-key: <API_KEY value from your .env>"   # past the guard → ValidationPipe answers 400 (empty body)
 ```
 
 (`-I` makes curl send a HEAD request and print only the response headers —
@@ -335,19 +369,22 @@ endpoint itself stays guard-exempt.
 TODO-03 delivered the complete **contract** of `POST /v1/transactions`: the
 classes that declare what the endpoint will accept and return. Per TODO-03
 §6 this is contract-only work — **no controller, module, service, business
-logic or tests were created**. Consequences an agent must know today:
+logic or tests were created**. The wiring arrived later: TODO-05 shipped
+the service, and since **TODO-06 Cycle A** the contract is live —
+consequences an agent must know today:
 
-- `POST /v1/transactions` is still **not reachable** — it **404s** like every
-  other non-health route (see
-  [API behavior at this stage](#api-behavior-at-this-stage)).
-- Swagger `/docs` still lists **only the health probe**; the DTOs carry full
-  `@ApiProperty` metadata but nothing renders it until the **controller
-  TODO** declares the endpoint (TODO-04 shipped the clients and TODO-05 the
-  orchestration service — neither registers a route).
-- `TRANSACTIONS_RETURN_BODY` has had its first consumer since TODO-05 — a
-  **service-level** gate in `TransactionsService` — but still has **no
-  HTTP-observable effect** (no route invokes the service; toggle contract
-  below).
+- `POST /v1/transactions` **is reachable** — `TransactionsController` binds
+  this exact DTO contract to the route (see
+  [Transactions endpoint (TODO-06 Cycle A)](#transactions-endpoint-todo-06-cycle-a)).
+- Swagger `/docs` **renders the operation** since TODO-06 Cycle A — the
+   `@ApiProperty` metadata on every DTO below feeds the request/response
+   schemas, and the controller's decorator set documents 201 + the error
+   responses (the 502/503/500 bodies are REAL answers since the Cycle-B
+   filter went live — see
+   [Error handling & compensation (TODO-06 Cycle B)](#error-handling--compensation-todo-06-cycle-b)).
+- `TRANSACTIONS_RETURN_BODY` has its service-level gate (TODO-05) **and**
+  the route that exposes it: `false` ⇒ bare `201` over HTTP today
+  (toggle contract below).
 
 | Artifact (paths under `src/`) | Role |
 |-------------------------------|------|
@@ -360,7 +397,7 @@ logic or tests were created**. Consequences an agent must know today:
 | `common/constants/payment-fee.constants.ts` | `PAYMENT_FEE_PERCENTAGES`: debit `"2"`, credit `"4"` — fee **percentage strings**, not amounts — consumed by `TransactionsService`/`fee-rules.ts` since TODO-05 |
 | `common/utils/card-number.util.ts` | `maskCardNumber()`: pure last-4-digits helper — called on `TransactionsService`'s write path since TODO-05 |
 
-### What the contract guarantees (once the controller route is wired — pending TODO)
+### What the contract guarantees (enforced on the live route since TODO-06 Cycle A)
 
 `CreateTransactionDto` field rules — invalid payloads are rejected with
 **400** by the *existing* global `ValidationPipe`
@@ -400,9 +437,9 @@ orchestration service `TransactionsService` (TODO-05,
 `src/transactions/transactions.service.ts`) truncates via `maskCardNumber()`
 (`src/common/utils/card-number.util.ts`) when building the transaction
 payload — *before* storing to json-server and answering; nothing stores or
-returns the full PAN. The helper now has a runtime caller (the service),
-though it is still unexercised over HTTP — no route invokes
-`create()` until the controller TODO lands.
+returns the full PAN. The helper's runtime call-site is the service, and
+since TODO-06 Cycle A the whole path is **exercised over HTTP** — every
+successful `POST /v1/transactions` masks the card before persistence.
 
 ### Envelope switch (`TRANSACTIONS_RETURN_BODY`)
 
@@ -413,20 +450,20 @@ env table above has its row). Consumed at the **service layer** since TODO-05:
 envelope (built from the client-echoed bodies) when the flag is `true`, and
 `undefined` when `false` (`get(key, true)`). The route-level translation —
 `true` ⇒ 201 with the body, `false` ⇒ bare `201 CREATED` (TODO-03 §2.4) —
-belongs to the still-pending controller TODO. **Setting the flag today still
-has no HTTP-observable effect** — no route invokes the service (TODO-03
-shipped plumbing only; TODO-05 shipped the service gate).
+is **live since TODO-06 Cycle A**: `TransactionsController` returns the
+service result directly and Nest serializes `undefined` as the empty-body
+`201`. **Setting the flag is HTTP-observable today** (restart after
+changing `.env`; TODO-03 shipped plumbing, TODO-05 the service gate,
+TODO-06 Cycle A the route).
 
 ### Verifying the contract today
 
-Runtime exercises (curl against the endpoint, Swagger rendering, validator
-REPL checks) belong to the controller TODO that wires the route — the
-orchestration service landed with TODO-05
-(see [Transactions orchestration service
-(TODO-05)](#transactions-orchestration-service-todo-05)) but nothing invokes it
-from HTTP yet; out of scope for this cycle (TODO-03 §6:
-no tests). The current green signal for the layer is that it compiles and
-lints as part of the app:
+The endpoint is live, so the runtime exercises (curl against
+`POST /v1/transactions`, Swagger rendering, 400/401/201 checks) are the
+**user-run recipes** in
+[Transactions endpoint (TODO-06 Cycle A)](#transactions-endpoint-todo-06-cycle-a)
+— agents never execute them (global-plan G9 house rule). The compile-time
+green signal for the layer stays:
 
 ```bash
 npm run build   # exit 0 → DTOs, validators, enums, constants and helper compile & are importable
@@ -434,10 +471,10 @@ npm run lint    # exit 0
 ```
 
 Each new file's JSDoc header records its purpose, TODO-03 section, exact
-validator semantics/messages and current consumers (the TODO-05 docs sweep
-refreshed the stale ones: `TransactionsService` + `fee-rules.ts` now consume
-the masking helper, fee constants and enums — the controller and every test
-spec remain later TODOs).
+validator semantics/messages and current consumers (this cycle's TODO-06
+truth sweep refreshed them all to endpoint reality: the service, route and
+Swagger now exercise the contract; every spec-test remains the deferred
+testing TODO).
 
 ## External clients (TODO-04)
 
@@ -447,10 +484,11 @@ only — no other HTTP library). **All three tasks are implemented** on branch
 client) and **Task 3 (module registration + HTTP timeout)** — both modules
 are now wired into `AppModule` and both clients boot with a 4 s Axios
 timeout (commit `7a4a149`). Everything below describes what exists today;
-no client performs live HTTP traffic at runtime only because their first
-caller — the TODO-05 `TransactionsService` — is still unreachable from any
-route (see [Transactions orchestration service
-(TODO-05)](#transactions-orchestration-service-todo-05)).
+both clients have a **live HTTP path**: their only caller
+`TransactionsService` (TODO-05) is invoked over HTTP by
+`TransactionsController` since TODO-06 Cycle A, so outbound traffic to the
+mock services happens whenever `POST /v1/transactions` runs (see
+[Transactions endpoint (TODO-06 Cycle A)](#transactions-endpoint-todo-06-cycle-a)).
 
 ### Numerator client — `src/numerator/` (Task 1)
 
@@ -484,8 +522,10 @@ anything. Conflicts log a `warn` line (attempt, current, candidate);
 numerator values are non-sensitive, and card data must never appear in these
 logs (global plan G13). Mapping any of these errors to HTTP responses (e.g.
 503) is **not** this client's job — `TransactionsService` (TODO-05) also
-propagates them raw on purpose; HTTP mapping is the pending controller
-TODO's job (global plan G18).
+propagates them raw on purpose: since TODO-06 **Cycle B** the global
+`AllExceptionsFilter` answers all three Numerator errors with a structured
+**503** carrying their messages verbatim (HTTP mapping per global plan
+G18 → G4, LIVE).
 
 **Config flow:** all reads go through `ConfigService` + `ConfigKeys` — never
 `process.env`. `NUMERATOR_API_URL` is required (`getOrThrow` in the service
@@ -498,9 +538,10 @@ constructed on every boot and resolves its config reads then — and its
 `HttpModule` import uses the timeout-configured
 `HttpModule.register({ timeout: HTTP_TIMEOUT_MS })` form (`@nestjs/axios`
 **v4 has no `forRoot`** — decision T1-D7, applied by plan decision T3-D1).
-`npm run start:dev` still exercises none of the HTTP path: the code that
-calls `getNextId()` exists since TODO-05 (`TransactionsService`), but no
-controller has wired a route to run it.
+Since TODO-06 Cycle A the HTTP path is exercised: each successful
+`POST /v1/transactions` runs `getNextId()` **twice** (both ids reserved
+before any write), so with `docker compose up` + `npm run start:dev` the
+full CAS traffic really happens.
 
 ### json-server client — `src/json-server/` (Task 2)
 
@@ -519,8 +560,9 @@ Summary of the committed surface:
 - **What it never does:** generate ids, calculate fees, mask card numbers,
   default fields (even `create_date`), assert the 201 status (T2-D3) or
   **retry** — fail-fast is explicit TODO-04 §Out of scope policy; mapping
-  failures to HTTP responses is the pending controller TODO's job (G18;
-  `TransactionsService` propagates them raw until then, TODO §Task 5).
+  failures to HTTP responses is the global `AllExceptionsFilter`'s job —
+  **LIVE since TODO-06 Cycle B** (G18 → G4: it maps `JsonServerRequestError`
+  to **503** on unknown/5xx statuses and **502** on 4xx, message verbatim).
 - **Config:** `JSON_SERVER_URL` via `ConfigService.getOrThrow` at
   construction; trailing slashes normalized once (T2-D1). **No new env
   key arrived with this task** — the variable was validated since TODO-02.
@@ -539,10 +581,11 @@ running. The mock is started via `docker compose up` at the repo root, but
 **never run docker commands autonomously from an agent session — ask the
 user** (TODO-04 §Context). If `localhost:3000` refuses connections, that
 just means the service is down; the expected shapes below document
-the exact traffic `NumeratorService` sends when `getNextId()` runs — today
-the first caller exists (`TransactionsService`, TODO-05) but no route runs
-it; the client also boots config reads, so until the controller TODO
-provides the endpoint, none of this traffic happens):
+the exact traffic `NumeratorService` sends when `getNextId()` runs —
+that caller (`TransactionsService`, TODO-05) is now driven by the live
+`POST /v1/transactions` route (TODO-06 Cycle A), which runs this traffic
+**twice per request**; so once the endpoint is invoked, all of this
+traffic happens):
 
 PowerShell (always `curl.exe`; JSON bodies need the `\"` escaping):
 
@@ -579,16 +622,26 @@ invalid-params calls (3 and 4) change nothing. Call 1 (`GET`) is read-only.
   `HTTP_TIMEOUT_MS = 4000` from
   `src/common/constants/http-timeout.constants.ts` (per the TODO
   §Configuration & resilience 3–5 s guidance; v4 has no `forRoot` —
-  T1-D7/T3-D1). Both services are injectable app-wide from here on; they
-  boot with config reads only and send **zero outbound requests** at
-  runtime — `TransactionsService` (TODO-05) is their first caller, but no
-  HTTP route invokes it until the controller TODO lands.
+  T1-D7/T3-D1). Both services are injectable app-wide from here on; boot
+  itself performs zero outbound requests — since TODO-06 Cycle A they call
+  the mock services **only while `POST /v1/transactions` is invoked**
+  (`TransactionsService` orchestration, their single caller).
 - **Landed since then (TODO-05):** the orchestration service, its module,
   fee calculation and the card-number masking call-site — see
   [Transactions orchestration service (TODO-05)](#transactions-orchestration-service-todo-05) below.
-- **Still out of scope (not built):** controller endpoints, HTTP error
-  mapping (G18) and the guard/Swagger wiring around `POST /v1/transactions`
-  — the controller TODO owns them.
+- **Landed since then (TODO-06 Cycle A):** the `POST /v1/transactions`
+  controller — route live, guard 401 / ValidationPipe 400 observable, full
+  Swagger operation — see
+  [Transactions endpoint (TODO-06 Cycle A)](#transactions-endpoint-todo-06-cycle-a).
+- **Landed since then (TODO-06 Cycle B):** the global `AllExceptionsFilter`
+  with structured 502/503/500 mapping (G18 → G4) and the
+  `TransactionCompensationService` orphan-DELETE compensation (G5) — client
+  and service domain errors now answer with their mapped structured body,
+  never the NestJS default 500. The `transactions` json-server collection
+  gained a second consumer (the compensation `DELETE`), issued through a
+  TransactionsModule-local `HttpModule.register` instance; `src/json-server/`
+  itself kept ZERO diffs (G7). Full behavior + recipes:
+  [Error handling & compensation (TODO-06 Cycle B)](#error-handling--compensation-todo-06-cycle-b).
 - **Tests:** unit/e2e suites for both clients remain explicitly deferred by
   TODO-04 (§Out of scope) to a later TODO; TODO-05 adds none either.
 
@@ -604,8 +657,8 @@ explicit out-of-scope list (no controller/route/Swagger/guard usage/tests).
 
 | Artifact | Role |
 |----------|------|
-| `transactions.service.ts` — `TransactionsService.create(dto)` | The 9-step orchestrator (below); **exported and injectable app-wide** — nothing calls it over HTTP yet |
-| `transactions.module.ts` — `TransactionsModule` | Imports `NumeratorModule` + `JsonServerModule` (both already registered by TODO-04 Task 3; importing them grants the exports), provides + exports the service, **no controller**; registered in `AppModule` |
+| `transactions.service.ts` — `TransactionsService.create(dto)` | The 9-step orchestrator (below); **exported and injectable app-wide** — invoked over HTTP by `TransactionsController` since TODO-06 Cycle A |
+| `transactions.module.ts` — `TransactionsModule` | Imports `NumeratorModule` + `JsonServerModule` (both already registered by TODO-04 Task 3; importing them grants the exports), provides + exports the service, **registers `TransactionsController` since TODO-06 Cycle A**; registered in `AppModule` |
 | `fee-rules.ts` | Pure fee/date functions (no Nest deps — designed as the unit-test target of a later TODO): `resolveReceivableStatus`, `computeTotal`, `formatDateDDMMYYYY` |
 
 **`create()` flow (strict order — the 9 steps of TODO §Flow):**
@@ -629,11 +682,12 @@ explicit out-of-scope list (no controller/route/Swagger/guard usage/tests).
 8. `jsonServerService.createReceivable(payload)` (strict
    transaction-then-receivable order)
 9. Gate on `ConfigKeys.TransactionsReturnBody` via
-   `configService.get(key, true)`: return the envelope
-   (`CreateTransactionResponseDto`, both bodies **echoed from the client
-   responses**) — or `undefined` when the flag is `false` (the future
-   controller relaying `undefined` yields Nest's natural **bare `201`**;
-   the HTTP status itself is controller territory)
+    `configService.get(key, true)`: return the envelope
+    (`CreateTransactionResponseDto`, both bodies **echoed from the client
+    responses**) — or `undefined` when the flag is `false` (the route is
+    live since TODO-06 Cycle A: `TransactionsController` relays the result
+    directly, so `undefined` yields Nest's natural **bare `201`** —
+    `@HttpCode(HttpStatus.CREATED)` sets the status on the nil-body send)
 
 **Fee rules table** (TODO §Fee, `brief.md` §3.2 — fee percentages come only
 from `PAYMENT_FEE_PERCENTAGES`):
@@ -665,20 +719,28 @@ from `PAYMENT_FEE_PERCENTAGES`):
   **strings** on payloads and responses (wire invariants,
   [DTO & validation layer](#dto--validation-layer-todo-03)).
 
-**Errors (TODO §Error behaviour):** zero try/catch — `getNextId()`
-rejections (Numerator domain errors) and `JsonServerRequestError` from
-either write propagate **raw**. `createTransaction` OK but
-`createReceivable` failing leaves a **partially written state**; accepted
-at this stage per TODO §Error (compensation/saga + HTTP mapping are the
-controller TODO's scope, global plan G18). The one success log line carries
-**only** the two numeric ids — never payloads/card data.
+**Errors (TODO §Error behaviour):** `getNextId()` rejections (Numerator
+domain errors) and `JsonServerRequestError` from either write propagate
+**raw** out of `create()`. At the TODO-05 commit the service had zero
+try/catch and a failed second write left a **partially written state** (an
+orphan transaction) — accepted then, because compensation + structured HTTP
+mapping were reserved for TODO-06 **Cycle B**. **That is no longer the
+reality**: since Cycle B the service's ONE try/catch wraps
+`createReceivable`, an orphaned transaction is deleted by
+`TransactionCompensationService`, the original error is rethrown, and the
+global `AllExceptionsFilter` answers it with the mapped structured 502/503
+body — global plan G18 → G4/G5, now LIVE; see
+[Error handling & compensation (TODO-06 Cycle B)](#error-handling--compensation-todo-06-cycle-b).
+The one success log line carries **only** the two numeric ids — never
+payloads/card data.
 
 **How to use / test later (AI-agent guidance):**
-- `TransactionsService` is injectable anywhere in the DI graph today, but —
-  house rule — **this cycle executed NO live HTTP** (route absent; services
-  may be down), so there are **no live-verified wire observations** for
-  `create()` traffic; expected shapes above are transcribed from the
-  interfaces and the two client docs
+- `TransactionsService` is injectable anywhere in the DI graph and since
+  TODO-06 Cycle A is ALSO invoked over HTTP by `POST /v1/transactions` —
+  but the house rule stands (**agents execute no live HTTP**; docker
+  services only via user), so this docs cycle records **no live-verified
+  wire observations**; expected shapes above and in the endpoint section
+  are transcribed from the interfaces and the two client docs
   ([json-server client guide](json-server-client.md), Numerator section
   above).
 - Later unit-test target (deferred testing TODO): `fee-rules.ts` needs no
@@ -686,9 +748,201 @@ controller TODO's scope, global plan G18). The one success log line carries
   `create()` order/echo behavior needs `NumeratorService` +
   `JsonServerService` mocks only. The gate reads `get(key, true)` — test in
   both flag states.
-- The green signal today stays `npm run build` + `npm run lint` (exit 0);
-  `POST /v1/transactions` still **404s** (see
-  [API behavior at this stage](#api-behavior-at-this-stage)).
+- The green signal stays `npm run build` + `npm run lint` (exit 0);
+  `POST /v1/transactions` is **live** — user-run exercises in
+  [Transactions endpoint (TODO-06 Cycle A)](#transactions-endpoint-todo-06-cycle-a).
+
+## Transactions endpoint (TODO-06 Cycle A)
+
+TODO-06 §Task 1 + §Task 3 (`.agent/todos/20260913/20260913-todo-6.md`;
+branch `feat/transactions-endpoint`, v0.5.0, commit `d12676f`; global plan
+`.kilo/plans/20260914-transactions-endpoint.md` G1–G3/G6 + cycle plan
+`.kilo/plans/20260914-transactions-controller.md`) landed the HTTP surface:
+`src/transactions/transactions.controller.ts` — a thin
+`@Controller('transactions')` (no `version` metadata: the global
+`defaultVersion: '1'` mounts it at **`POST /v1/transactions`**, contrast
+the `VERSION_NEUTRAL` health probe) with a single `@Post()` handler that
+binds `CreateTransactionDto` → `TransactionsService.create(dto)` and
+**returns the service result directly** (G3: validate → call → return; no
+try/catch, no business logic). Registered via
+`controllers: [TransactionsController]` in `TransactionsModule`
+(`AppModule` import pre-existing).
+
+| Behavior | Status today |
+|----------|--------------|
+| Auth | Global `ApiKeyGuard` (`APP_GUARD`) — deliberately NO `@UseGuards`/`@Public()` on the controller (single enforcement, G1): missing/wrong `x-api-key` → **401** — observable |
+| Validation | Global `ValidationPipe` vs `CreateTransactionDto` → **400**, unknown properties rejected — observable |
+| Success (default) | `TRANSACTIONS_RETURN_BODY=true` → **201** + `{ transaction, receivable }` envelope |
+| Success (bare) | `TRANSACTIONS_RETURN_BODY=false` → service returns `undefined` → **201 with empty body** (`@HttpCode(201)` + nil-body send); restart after changing `.env` |
+| Domain errors | `NumeratorUnavailableError` / `NumeratorRetriesExhaustedError` / `InvalidNumeratorValueError` → **503**; `JsonServerRequestError` → **503** (unknown/5xx) / **502** (4xx) — mapped by the global `AllExceptionsFilter` since TODO-06 Cycle B. If the receivable write fails after the transaction was persisted, an orphan-DELETE compensation runs FIRST (bounded retries), then the original error maps; a surviving orphan is possible but reduced (§2.2) |
+| Swagger | Operation fully documented at `/docs` (legacy decorator set — verified non-deprecated in installed `@nestjs/swagger` 11.4.7 — + `@ApiBadGateway`/`@ApiInternalServerError`; the documented 502/503/500 bodies ARE real answers since the Cycle-B filter landed) |
+
+> **Shipped — TODO-06 Cycle B (same TODO file + branch):** structured
+> **502/503/500 error mapping** via the global `AllExceptionsFilter` (G4)
+> and **partial-failure compensation** for orphaned transactions (G5) are
+> LIVE. The TODO §2.1 error table is fully effective: 400/401/201 keep
+> working exactly as specified, the 503/502/500 rows and the consistent
+> `{ statusCode, message, error }` body are implemented.
+> Full contract, compensation knobs + fault-injection recipes:
+> [Error handling & compensation (TODO-06 Cycle B)](#error-handling--compensation-todo-06-cycle-b).
+
+### How to exercise it (user-run examples — agents never execute these)
+
+Prerequisite: both mock services up — `docker compose up` at the repo root
+(json-server on `:8080`, Numerator on `:3000`) — then `npm run start:dev`
+(app listens on **`3001`** with the example `.env`). Transcribed from the
+TODO §Implementation guidance / cycle plan §8:
+
+Via **Swagger**: open `http://localhost:3001/docs/` → **Authorize** →
+paste your `.env` `API_KEY` exactly (document-level requirement sends the
+header on Try-it-out) → expand `POST /v1/transactions` → try the
+`CreateTransactionDto` example body (test PAN `4111111111111111`).
+
+Via **curl** (PowerShell — always `curl.exe`; `\"` escapes inside JSON):
+
+```powershell
+# 0) health regression — still 200, no key needed
+curl.exe -I http://localhost:3001/health/ping
+
+# 1) happy path — expect 201 + envelope (ids continue after the seed's "3":
+#    e.g. transaction "4" + receivable "5"; card masked to "1111";
+#    credit_card ⇒ discount "4", total "96.00", status "waiting_funds";
+#    both rows then present in json-server)
+curl.exe -i -X POST http://localhost:3001/v1/transactions `
+  -H "Content-Type: application/json" `
+  -H "x-api-key: your-secret-api-key-here" `
+  -d '{\"value\":\"100.00\",\"description\":\"T-Shirt Black M\",\"method\":\"credit_card\",\"cardNumber\":\"4111111111111111\",\"cardHolderName\":\"Jane Doe\",\"cardExpirationDate\":\"12/28\",\"cardCvv\":\"123\"}'
+
+# 2) same call WITHOUT the x-api-key header → 401
+# 3) same call with an invalid field (e.g. "value":"-5") → 400
+# 4) TRANSACTIONS_RETURN_BODY=false in .env, restart → 201 + EMPTY body
+```
+
+Fee/id/echo expectations follow the
+[Transactions orchestration service (TODO-05)](#transactions-orchestration-service-todo-05)
+flow above. These flows were **not live-executed by any agent cycle**
+(global plan G9) — first-hand verification belongs to the user.
+
+## Error handling & compensation (TODO-06 Cycle B)
+
+TODO-06 §Task 2 (`.agent/todos/20260913/20260913-todo-6.md` §2.1–§2.3;
+same branch `feat/transactions-endpoint`) completed the error contract:
+`2416915` added the global `AllExceptionsFilter` (`src/common/filters/`,
+registered via `APP_FILTER` in `app.module.ts`), `1b73935` added the
+compensation class (`transaction-compensation.service.ts`), its
+`compensation.constants.ts` knobs and the single service try/catch, and
+`271c94b` fixed the controller's Swagger descriptions to match reality;
+`35d314d` (4.3 review fix — single-section boolean helpers; its
+`isNumeratorError` deviates from the plan snippet only by typing the
+return as a TS type predicate) and `6e709f9` (4.3 simplification: stale
+comment sweep + reason-computation hoist). Every unhandled exception now
+answers with the structured `{ statusCode, message, error }` JSON body —
+Nest's default error output is gone except the deliberate generic 500
+(row below).
+
+### Status contract (§2.1 — all rows EFFECTIVE)
+
+| Cause | Status | Reply body |
+|-------|--------|------------|
+| DTO validation failure (global `ValidationPipe`) | **400** | Nest's own body passes through **verbatim** — the `message` **array** of validator strings survives unchanged (CB-D2a; guard against "fixes" that stringify it) |
+| Missing/invalid `x-api-key` (global `ApiKeyGuard`) | **401** | Nest's guard body passes through verbatim |
+| Unknown route | **404** | Nest's own 404 body passes through verbatim — already the structured 3-key shape (global plan G10) |
+| `NumeratorUnavailableError` / `NumeratorRetriesExhaustedError` / `InvalidNumeratorValueError` | **503** | `message` verbatim (payload-safe by construction, carries e.g. the "after N attempts" detail), `error: "Service Unavailable"` |
+| `JsonServerRequestError` with `status` unknown or ≥ 500 | **503** | `message` verbatim, `error: "Service Unavailable"` |
+| `JsonServerRequestError` with a 4xx status | **502** | `message` verbatim, `error: "Bad Gateway"` |
+| Any other (unknown) error | **500** | Generic body `{"statusCode":500,"message":"Internal server error","error":"Internal Server Error"}` in **every** environment |
+
+- **502 over the "or 500" alternative (decided in G4/CB-D2):** an
+  unexpected upstream 4xx is a contract anomaly behind this gateway — 502
+  tells clients "the service I proxy answered wrongly", which is more
+  truthful than 500 "I broke"; it also matches the `@ApiBadGatewayResponse`
+  already shipped in Cycle A. 5xx/unknown upstream statuses → 503.
+- **`error` phrases** come from a local `HTTP_STATUS_PHRASES` map in
+  `src/common/filters/all-exceptions.filter.ts` — zero new dependencies.
+- **Domain messages are never rewritten (CB-D2b):** clients throw
+  payload-free messages (T2-D7); the filter copies them verbatim, so no
+  fixed string loses the §2.1-required detail.
+
+### Production stack rule (CB-D3 — log-only)
+
+The filter has a **zero-dependency constructor**: no `ConfigService`, no
+`NODE_ENV` read. Unknown errors log `error.message` + `error.stack`
+server-side via `Logger.error` **always**, and the client receives the
+generic 500 body **in every environment**. A stack or internal detail
+therefore **cannot** reach a response by construction — this is stronger
+than the §2.3 "no leak when `NODE_ENV=production`" requirement and immune
+to a forgotten env branch.
+
+### Logging privacy
+
+Every log line in the error/compensation path carries **ids, attempt
+counters and axios-generated reasons ONLY**. Request payloads (card data)
+and upstream response bodies are never logged and never serialized into
+messages anywhere (T2-D7/G5/G13).
+
+### Partial-failure compensation (§2.2 — orphans REDUCED, not eliminated)
+
+When `createTransaction` succeeded but `createReceivable` failed, the
+transaction row already exists, so `TransactionsService` wraps **that one
+call** in the pipeline's **only** try/catch — and it catches **ANY** error
+(CB-D6: network/timeout/5xx/4xx all leave the same orphan; only Numerator
+failures stay pre-write and outside the try). It awaits
+`TransactionCompensationService.deleteTransaction(transactionId)`, then
+**rethrows the ORIGINAL receivable error** — the client still receives the
+mapped 502/503 above; compensation never masks it, and `deleteTransaction`
+itself **never throws** (contract CB-D4): it returns `true` (deleted or
+already absent) or `false` (still orphaned).
+
+| Knob | Value | Defined in |
+|------|-------|------------|
+| Total DELETE attempts | `COMPENSATION_MAX_ATTEMPTS = 3` | `src/common/constants/compensation.constants.ts` |
+| Backoff between attempts | `min(200 × 2^(attempt−1), 1600)` ms — `COMPENSATION_BASE_BACKOFF_MS = 200`, no sleep after the last attempt | same file |
+| Backoff ceiling | `COMPENSATION_MAX_BACKOFF_MS = 1600` | same file |
+
+- DELETE target: `{JSON_SERVER_URL}/transactions/:id`, sent through the
+  `TransactionsModule`'s own `HttpModule.register({ timeout: 4000 })`
+  instance (isolated-instance precedent T3-D2) — `src/json-server/` has
+  ZERO diffs; only `TRANSACTIONS_RESOURCE_PATH` is imported from its
+  constants (G7).
+- A **404 on the DELETE counts as success** (CB-D4a): the row is already
+  gone; retrying a permanent 404 would waste the budget.
+- If all attempts fail, exactly **one** `logger.error` line records the
+  surviving orphan (transaction id + receivable failure reason ONLY).
+- **No env keys back the knobs** (G7) — in-code constants, mirroring
+  `http-timeout.constants.ts`. No saga, no circuit breaker: the TODO's
+  goal is to REDUCE orphans; a still-failing DELETE leaves the
+  inconsistency logged.
+- Registration: `TransactionCompensationService` is provided by
+  `TransactionsModule` and **not exported** (private-member rule — its only
+  consumer is `TransactionsService`).
+
+### Fault-injection recipes (user-run — agents never execute docker/HTTP)
+
+Prerequisites: `docker compose up` + `npm run start:dev` (PowerShell,
+always `curl.exe`):
+
+1. **401:** `curl.exe -i -X POST http://localhost:3001/v1/transactions`
+   (no header) → 401 +
+   `{"statusCode":401,"error":"Unauthorized","message":"Missing or invalid x-api-key header"}`.
+2. **400:** valid key + `"value":"-5"` → 400 with `message` as an ARRAY of
+   validator strings, `error: "Bad Request"`.
+3. **503 (Numerator down):** `docker compose stop numerator-api` → valid
+   POST →
+   `503 {"statusCode":503,"message":"connect ECONNREFUSED …","error":"Service Unavailable"}`;
+   restart with `docker compose start numerator-api`.
+4. **503 (json-server down):** `docker compose stop json-server` → valid
+   POST → 503 (fails at the **first** write, before any persistence — no
+   orphan, nothing to compensate); restart.
+5. **502 / receivable-only failure (compensation path):** NOT forceable via
+   configuration alone (needs json-server to accept the transaction POST but
+   reject the receivable POST); documented honestly as **deferred to the
+   TODO-07 test cycle** — no fake recipe is provided.
+6. **Production stack check:** set `NODE_ENV=production` in `.env`, restart,
+   run recipe 3 → the 503 body is still the structured 3-key body with **no
+   stack trace**; the stack appears only on the server console via the Nest
+   logger (for the unknown-error branch, any unhandled crash logs
+   `Unhandled exception: …` server-side while the client gets the generic
+   500).
 
 ## Verify
 
@@ -707,13 +961,15 @@ probe (TODO-02 §4), public via `@Public()` under the live API-key guard
 curl -i http://localhost:3001/
 ```
 
-Expected: **`HTTP 404`** — every other unknown route still 404s (a real reply,
+Expected: **`HTTP 404`** — every still-unmatched route 404s (a real reply,
 not a connection error; matched routes only are guard-checked, so unknown
 paths 404 rather than 401) with **helmet security headers** on the response,
-and the morgan request line printed on the server console. Note: a live
-**401** is not externally observable yet — the guard is active, but no
-protected endpoint is committed at this stage (G10); the first `/v1` route of
-the next TODO will expose it. Then:
+and the morgan request line printed on the server console. Unlike earlier
+stages, a live **401** IS externally observable now — `POST /v1/transactions`
+(Guard & full behavior matrix: [API behavior at this
+stage](#api-behavior-at-this-stage) and
+[Transactions endpoint (TODO-06 Cycle A)](#transactions-endpoint-todo-06-cycle-a)).
+Then:
 
 ```bash
 curl -s -o /dev/null -w "%{http_code}\n" http://localhost:3001/docs/
@@ -800,6 +1056,21 @@ of scope for TODO-02 and arrive in later work.
   §Task 1–§Task 3 + §"Configuration & resilience" (all three tasks
   implemented; §Task 3 carries the workflow's final `[DONE]` mark once
   its 4.5b/4.6 steps close)
+- TODO-06 global plan (transactions endpoint & error handling — two cycles:
+  A = controller & wiring G1–G3/G6 [**implemented**], B = exception filter
+  G4 + compensation G5 [**implemented** — commits `2416915` `1b73935`
+  `271c94b` `35d314d` `6e709f9`; binding decisions G1–G10 incl. the G10
+  404 pass-through, frozen surfaces G7, no-live-HTTP gates G9):
+  [`.kilo/plans/20260914-transactions-endpoint.md`](../.kilo/plans/20260914-transactions-endpoint.md);
+  Cycle A implementation plan (decisions CA-D1…CA-D8, incl. CA-D6
+  deferral of this step's JSDoc truth sweep):
+  [`.kilo/plans/20260914-transactions-controller.md`](../.kilo/plans/20260914-transactions-controller.md);
+  Cycle B behavior contract: this guide's
+  ["Error handling & compensation (TODO-06 Cycle B)"](#error-handling--compensation-todo-06-cycle-b)
+  section (decisions CB-D1…CB-D8);
+  source TODO: [`.agent/todos/20260913/20260913-todo-6.md`](../.agent/todos/20260913/20260913-todo-6.md)
+  §Task 1 + §Task 3 (Cycle A) + §Task 2 (Cycle B — runtime-complete;
+  `[DONE]`/archive marks belong to workflow steps 4.6/5)
 
 ## Related docs
 
@@ -812,5 +1083,12 @@ of scope for TODO-02 and arrive in later work.
   ["Transactions orchestration service (TODO-05)"](#transactions-orchestration-service-todo-05)
   section; global/impl plans in `.kilo/plans/20260914-transaction-orchestration.md`
   (+ `-impl.md`); task file `.agent/todos/20260913/20260913-todo-5.md`.
+- TODO-06 endpoint (Cycle A) + error handling & compensation (Cycle B):
+  this guide's
+  ["Transactions endpoint (TODO-06 Cycle A)"](#transactions-endpoint-todo-06-cycle-a)
+  and ["Error handling & compensation (TODO-06 Cycle B)"](#error-handling--compensation-todo-06-cycle-b)
+  sections; plans in "Plan references" above; task file
+  `.agent/todos/20260913/20260913-todo-6.md` (both cycles implemented —
+  same branch).
 - Target architecture of the completed API (status block marks the parts
   already implemented): [`.agent/project-info/architecture.md`](../.agent/project-info/architecture.md).

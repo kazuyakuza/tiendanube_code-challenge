@@ -6,8 +6,8 @@
  * whole string, so embedded whitespace or sign characters fail the match.
  *
  * AI-agent guidance: wire value invariant — `value` travels as a STRING;
- * applied to `CreateTransactionDto.value` today, reachable through HTTP
- * only once the controller TODO binds that DTO (the TODO-05 service does
+ * applied to `CreateTransactionDto.value` and exercised through HTTP
+ * since TODO-06 Cycle A on `POST /v1/transactions` (the service does
  * not re-validate — the global `ValidationPipe` owns this rule). Exact
  * error semantics are
  * on `IsPositiveDecimalStringConstraint` below.
@@ -37,7 +37,8 @@ export class IsPositiveDecimalStringConstraint implements ValidatorConstraintInt
    * `<property> must be a positive decimal string with at most 2 decimal
    * places (e.g. "250.00"); zero and negatives are not allowed`.
    * @param validationArguments class-validator context; supplies the property name.
-   * @returns the message string shown in the 400 `message[]` once the route exists (TODO-04).
+   * @returns the message string shown in the 400 `message[]` of
+   * `POST /v1/transactions` (live since TODO-06 Cycle A).
    */
   defaultMessage(validationArguments: ValidationArguments): string {
     return `${validationArguments.property} must be a positive decimal string with at most 2 decimal places (e.g. "250.00"); zero and negatives are not allowed`;

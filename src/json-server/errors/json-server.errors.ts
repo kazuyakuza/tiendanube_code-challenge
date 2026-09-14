@@ -9,9 +9,12 @@
  *
  * AI-agent guidance: mapping this error to HTTP responses is the orchestration
  * layer's job, NOT this client's (global plan G18) — no status codes are
- * thrown from here. The message is built ONLY from resource + status +
- * axios-generated reason text; upstream response bodies are never
- * interpolated (card-data privacy, TODO §Configuration & resilience).
+ * thrown from here. The mapping is LIVE since TODO-06 Cycle B: the global
+ * `AllExceptionsFilter` (`src/common/filters/`) answers unknown/5xx statuses
+ * with 503 and 4xx with 502, carrying this message verbatim. The message is
+ * built ONLY from resource + status + axios-generated reason text; upstream
+ * response bodies are never interpolated (card-data privacy, TODO
+ * §Configuration & resilience).
  */
 import type { JsonServerRequestFailure } from '../interfaces/json-server-request-failure.interface';
 

@@ -10,8 +10,9 @@
  * the enum member's string, never its name. Consumed by `CreateTransactionDto`
  * (`@IsEnum`) today; consumed since TODO-05 by the orchestration service
  * (`TransactionsService` + `src/transactions/fee-rules.ts` — status/fee
- * lookups keyed on this enum). Still no HTTP route reaches it: the
- * controller arrives with the controller TODO.
+ * lookups keyed on this enum). Reachable over HTTP since TODO-06 Cycle A:
+ * `POST /v1/transactions` (`TransactionsController`) validates and
+ * persists payloads keyed on these values.
  */
 export enum PaymentMethod {
   DEBIT_CARD = 'debit_card',
