@@ -83,13 +83,13 @@ export class TransactionCompensationService {
   }
 
   private async handleDeleteFailure(context: CompensationFailureContext): Promise<boolean> {
-    const reason = describeError(context.error);
     if (this.isAlreadyAbsent(context.error)) {
       this.logger.warn(
         `compensation succeeded — transaction ${context.transactionId} already absent (attempt ${context.attempt})`,
       );
       return true;
     }
+    const reason = describeError(context.error);
     this.logger.warn(
       `compensation delete failed — transaction ${context.transactionId}, attempt ${context.attempt}/${COMPENSATION_MAX_ATTEMPTS}, reason=${reason}`,
     );

@@ -8,8 +8,9 @@
  * the service can inject `NumeratorService` (two reserved ids per create)
  * and `JsonServerService` (both writes). The global `ConfigModule`
  * (`isGlobal: true`) needs no re-import for the `TRANSACTIONS_RETURN_BODY`
- * read. The service stays EXPORTED for future consumers (tests, Cycle-B
- * compensation wiring).
+ * read. The service stays EXPORTED for future consumers (e.g. tests); Cycle-B
+ * compensation wiring did not need it — `TransactionCompensationService` is
+ * provided here directly.
  *
  * Cycle B (TODO-06 §Task 2.2): provides `TransactionCompensationService` and
  * its own timeout-configured `HttpModule.register` instance (T3-D2 precedent)
