@@ -21,11 +21,18 @@
  * Security (TODO-02 §5): `ApiKeyGuard` is registered globally through the
  * `APP_GUARD` token, so every route requires the `x-api-key` header unless
  * exempted with `@Public()`. Run guide: `docs/app-setup.md`.
+ *
+ * Error handling (TODO-06 Cycle B): `AllExceptionsFilter` is registered
+ * globally through the `APP_FILTER` token and answers every unhandled
+ * exception with the structured `{ statusCode, message, error }` body
+ * (§2.1 mapping: Numerator → 503; json-server unknown/5xx → 503, 4xx → 502;
+ * unknown → generic 500).
  */
 import { Module } from '@nestjs/common';
-import { APP_GUARD } from '@nestjs/core';
+import { APP_FILTER, APP_GUARD } from '@nestjs/core';
 import { ConfigModule } from '@nestjs/config';
 import { ApiKeyGuard } from './common/guards/api-key.guard';
+import { AllExceptionsFilter } from './common/filters/all-exceptions.filter';
 import { validateEnv } from './config/env.validation';
 import { HealthModule } from './health/health.module';
 import { NumeratorModule } from './numerator/numerator.module';
@@ -44,6 +51,9 @@ import { TransactionsModule } from './transactions/transactions.module';
     JsonServerModule,
     TransactionsModule,
   ],
-  providers: [{ provide: APP_GUARD, useClass: ApiKeyGuard }],
+  providers: [
+    { provide: APP_GUARD, useClass: ApiKeyGuard },
+    { provide: APP_FILTER, useClass: AllExceptionsFilter },
+  ],
 })
 export class AppModule {}
