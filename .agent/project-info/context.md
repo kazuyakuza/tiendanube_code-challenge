@@ -5,22 +5,63 @@
 ## Current Work Focus
 
 **TODO-04 IN PROGRESS** — external clients (Numerator API + json-server), on
-branch `feat/external-clients` (v `0.3.0`). **Task 1 — Numerator client —**
-**implemented and documented** (4.2 commits fa9f723 / c18eda4 / b36b53c /
-d56eab3; 4.3 review: no fixes; 4.3 simplification: none; 4.4 docs: this cycle).
-`src/numerator/` ships `NumeratorService.getNextId()` — CAS retry loop with
-10 total attempts by default, retries ONLY genuine conflicts, 20 ms-base /
-160 ms-capped backoff, domain error classes — alongside a minimal
-`NumeratorModule`. The app still performs **no outbound HTTP at runtime**:
-`NumeratorModule` is not yet imported in `AppModule` and the `HttpModule`
-timeout config awaits **Task 3** (which must use `HttpModule.register` —
-`@nestjs/axios` v4 has no `forRoot`; decision T1-D7); **Task 2**
-(json-server client) is not started. Remaining Task 1 steps: 4.5b
-plan-adherence (architector) and 4.6 `[DONE]` mark on §Task 1 of
-`20260913-todo-4.md` (file stays untracked per G19). TODO-03 and TODO-02
+branch `feat/external-clients` (v `0.3.0`). **Tasks 1 & 2 — Numerator and
+json-server clients — implemented and documented** (Task 1: 4.2 commits
+fa9f723 / c18eda4 / b36b53c / d56eab3, §Task 1 marked `[DONE]`; Task 2:
+4.2 commits c827d8b / de84780 / 7af33e9; 4.3 review: no fixes; 4.3
+simplification: none; 4.4 docs: this cycle). `src/json-server/` ships
+`JsonServerService.createTransaction/createReceivable` — **transport-only**
+`@nestjs/axios` POSTs to the two collections (no id generation, fees,
+masking, field defaulting or retries — fail-fast per TODO §Out of scope) —
+with the single `JsonServerRequestError` (`resource` +
+`status: number | undefined`, `undefined` on network/timeout/non-axios +
+payload-free message; card data never logged or serialized). The app still
+performs **no outbound HTTP at runtime**: neither `NumeratorModule` nor
+`JsonServerModule` is imported in `AppModule` and the `HttpModule` timeout
+config awaits **Task 3** (which must use `HttpModule.register` —
+`@nestjs/axios` v4 has no `forRoot`; decision T1-D7); until then no client
+instance boots. Remaining: Task 2's 4.5b adherence + 4.6 `[DONE]`, then
+**Task 3** with its 4.x cycle and workflow step 5. TODO-03 and TODO-02
 were closed earlier (both merged to `main` and pushed).
 
 ## Recent Changes
+
+- 2026-09-14: TODO-04 cycle Task 2 — json-server client (branch
+  `feat/external-clients`; 4.2 commits c827d8b §2.4 transport payload
+  interfaces + param objects + domain error, de84780 constants + service +
+  module, 7af33e9 structure map). New `src/json-server/`:
+  `json-server.service.ts` (`createTransaction` / `createReceivable` —
+  `HttpService.post` + `firstValueFrom` to `{JSON_SERVER_URL}/transactions`
+  / `/receivables`, echoed body returned with TYPE-only response-DTO typing
+  (G11), no 201 assertion (T2-D3), `getOrThrow` base URL with
+  trailing-slash normalization once at construction (T2-D1), fail-fast with
+  zero success logging and one failure warn carrying resource+status only),
+  `json-server.module.ts` (minimal, bare `HttpModule` — T2-D13; Task 3 owns
+  `HttpModule.register({ timeout })` + `AppModule`),
+  `json-server.constants.ts` (two resource paths; NO timeout constant),
+  `errors/json-server.errors.ts` (`JsonServerRequestError` —
+  `status: number | undefined`, `undefined` on network/timeout/non-axios
+  (T2-D4), message from resource+status+axios reason only — upstream bodies
+  never interpolated (T2-D7)), `interfaces/` (the two §2.4 payloads typed
+  with the shared enums — DTO reuse rejected (T2-D2), no `dto/` folder
+  (T2-D10) — plus two 2-params-rule param objects (T2-D11)). Config: zero
+  new keys — `JSON_SERVER_URL` gained its first consumer. 4.3: review = NO
+  FIX PLAN REQUIRED, simplification = NO SIMPLIFICATION REQUIRED.
+  Deviations/decisions T2-D1…T2-D13 per plan §5 (T2-D12: the stale
+  "only key without consumers" JSDoc consumption map was deferred from 4.2
+  to the 4.4 sweep — landed). 4.4 docs: `docs/json-server-client.md` NEW
+  (endpoints, §2.4 payload tables, failure model, privacy rule, config
+  notes, curl wire-shape exercises transcribed — NOT live-verified, docker
+  only via user), app-setup "External clients (TODO-04)" compact Task 2
+  subsection + TOC/Related-docs links + env-table row, consumed-now and
+  pending-lists + plan-reference sweeps (file exceeded ~200 lines, hence
+  the split); JSDoc: consumption maps updated in `env.validation.ts` +
+  `config.keys.ts`, guide + masking-helper links added in the service /
+  transaction-payload headers; `architecture.md` Task 2 entry + tree
+  marker + status correction; `tech.md` untouched (no fact changed).
+  Tests: none for this client (TODO-04 defers them; documented
+  neutrally). Task 1/3 facts unchanged. 4.5b/4.6 were
+  still open when this bullet was written.
 
 - 2026-09-13: TODO-04 cycle Task 1 — Numerator client (branch
   `feat/external-clients`; 4.2 commits fa9f723 config knobs, c18eda4 constants
@@ -178,12 +219,13 @@ were closed earlier (both merged to `main` and pushed).
 1. **Continue TODO-04** (`20260913-todo-4.md` — external clients; note: NOT
    the transactions-orchestration file its controllers/fees are explicitly
    out of scope there; pointer corrected from the stale pre-cycle wording
-   of this list): finish Task 1 with 4.5b adherence + 4.6 `[DONE]`, then
-   **Task 2 — json-server client** (`createTransaction` /
-   `createReceivable`, transport-only payloads, fail-fast on 4xx/5xx) and
-   **Task 3 — module registration** (both modules into `AppModule`;
+   of this list): Task 1 is `[DONE]`; Task 2 (json-server client) is
+   implemented + documented — finish it with 4.5b adherence + 4.6
+   `[DONE]`, then run the full 4.x cycle for **Task 3 — module
+   registration** (both modules — `NumeratorModule` + `JsonServerModule` —
+   into `AppModule`;
    `HttpModule.register({ timeout: HTTP_TIMEOUT_MS })` per T1-D7/G12;
-   structure map per G15) with their full 4.x cycles.
+   structure map per G15).
 2. Step 5: close TODO-04 — rename `20260913-todo-4.md` with the `-DONE`
    suffix in the working tree ONLY (file is untracked/user-owned per G19),
    merge `feat/external-clients` → `main`, push to `origin` only.

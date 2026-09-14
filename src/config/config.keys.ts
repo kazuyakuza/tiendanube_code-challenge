@@ -16,10 +16,10 @@
  * registered via `APP_GUARD` in `app.module.ts`); NumeratorApiUrl /
  * MaxRetries / NumeratorBaseBackoffMs → NumeratorService (TODO-04 Task 1,
  * implemented — `src/numerator/numerator.service.ts`; URL via `getOrThrow`,
- * optional knobs via `get(key, default)`); JsonServerUrl → json-server
- * client (TODO-04 Task 2 — the only key still without a consumer).
- * TransactionsReturnBody → transactions controller (TODO-04; plumbing only
- * as of TODO-03 §2.4).
+ * optional knobs via `get(key, default)`); JsonServerUrl → JsonServerService
+ * (TODO-04 Task 2, implemented — `src/json-server/json-server.service.ts`;
+ * URL via `getOrThrow`). TransactionsReturnBody → transactions controller
+ * (TODO-04; plumbing only as of TODO-03 §2.4).
  */
 export const ConfigKeys = {
   NodeEnv: 'NODE_ENV',

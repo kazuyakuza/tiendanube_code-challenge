@@ -1,7 +1,8 @@
 /**
  * json-server persistence client (TODO-04 §Task 2). Upstream: the provided
  * json-server container serving `config/db.json` on port 8080
- * (`docker-compose.yml`); runbook: `docs/app-setup.md` (External clients).
+ * (`docker-compose.yml`); guide: `docs/json-server-client.md` (linked from
+ * `docs/app-setup.md`, "External clients (TODO-04)").
  *
  * Transport-only: POSTs caller-built payloads to the `transactions` and
  * `receivables` collections and returns the echoed resource body. This client

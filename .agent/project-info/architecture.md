@@ -1,8 +1,12 @@
 # Architecture — Orchestration API (PLANNED)
 
-> STATUS: **Planned, not yet implemented.** `src/` is empty. This document
-> describes the target design that follows `brief.md` §6. Update after
-> implementation.
+> STATUS: **core layers implemented — see the dated updates below**
+> (through the 2026-09-14 Task 2 entry). This document originally described
+> the target design that follows `brief.md` §6; its "src/ is empty" framing
+> is superseded — `config/`, `common/` (guards/decorators/enums/constants/
+> utils), `health/`, `transactions/dto/` (contract-only), `numerator/` and
+> `json-server/` now exist — while the remaining sections stand as target
+> design until their dated entries land. Update after implementation.
 >
 > 2026-09-13 update (TODO-02 T1): §1-level project-root configs
 > (`package.json`, tsconfig/eslint/jest, `nest-cli.json`, `.env.example`) plus
@@ -107,12 +111,42 @@
 > `HttpModule` import is bare — Task 3 registers both modules and upgrades
 > to the timeout-configured `HttpModule.register` form (there is NO
 > `forRoot` in `@nestjs/axios` v4 — decision T1-D7); until then the running
-> app performs **zero outbound HTTP calls**. The "Concurrency Strategy"
+> app performs **zero outbound HTTP calls**. *(For Task 2 — the
+> `json-server/` block — implemented by the 2026-09-14 update below,
+> superseding only this sentence; the registration/timeout pending state
+> stands.)* The "Concurrency Strategy"
 > section below was reconciled to the implemented numbers per decision
 > T1-D6 (TODO governs: 10 attempts / 20 ms base / domain error classes —
 > the original 5 / 50 ms / direct-503 draft is superseded; HTTP mapping is
 > the orchestration TODO's job, global plan G18). Details:
 > `docs/app-setup.md` ("External clients (TODO-04)").
+>
+> 2026-09-14 update (TODO-04 Task 2): the `json-server/` block is now
+> **implemented** — `src/json-server/` ships `JsonServerService`'s
+> `createTransaction` / `createReceivable` (TODO §2.1–§2.3: `@nestjs/axios`
+> POSTs to `{JSON_SERVER_URL}/transactions` and `/receivables`, returning
+> the echoed resource body; json-server's 201 is NOT asserted — any
+> resolved response succeeds, decision T2-D3) under a **transport-only
+> contract** (§2.4): ids, masked card numbers, fee percentages, totals and
+> `create_date` are caller-supplied and never computed or defaulted here.
+> Failure model: fail-fast (a json-server retry policy is explicitly out of
+> scope — TODO §Out of scope), one domain error
+> `JsonServerRequestError` carrying `resource` + `status` + payload-free
+> `reason`, where `status: number | undefined` is `undefined` on
+> network/timeout/non-axios failures; neither messages nor logs ever
+> include payloads or upstream bodies (card-data privacy, §Configuration &
+> resilience; decision T2-D7). The base URL is `JSON_SERVER_URL` via
+> `ConfigService.getOrThrow` read at construction, trailing slashes
+> normalized once (decision T2-D1) — **no new env key**. Interfaces for the
+> two §2.4 transport payloads plus 2-params-rule param objects (G10), the
+> two resource-path constants, and a minimal `JsonServerModule` importing
+> the **bare `HttpModule`** await registration: **still pending (Task 3)**
+> — `HttpModule.register({ timeout })` + `AppModule` import both clients
+> (G12/G14, T1-D7), and neither service instance boots until then. Steps
+> 3–7 of "Request Data Flow" below remain target design (orchestration,
+> controllers, fees, masking, tests are later TODOs). Details:
+> `docs/json-server-client.md` + `docs/app-setup.md` ("External clients
+> (TODO-04)").
 
 ## Modular NestJS Layout (target)
 
@@ -137,7 +171,7 @@ src/
 │   ├── transactions.service.ts    # planned (TODO-04; first caller of maskCardNumber + fee constants)
 │   └── fee-rules.ts        # debit/credit fee map + date/status policy — planned; percentages in common/constants/ meanwhile
 ├── numerator/              # Numerator API client + CAS retry logic — IMPLEMENTED, TODO-04 Task 1 (getNextId; constants/errors/interfaces + minimal module — NOT yet imported by app.module.ts, Task 3)
-├── json-server/            # json-server HTTP client (transactions/receivables) — planned (TODO-04 Task 2)
+├── json-server/            # json-server persistence client — IMPLEMENTED, TODO-04 Task 2 (createTransaction/createReceivable transport-only POSTs; constants/errors/interfaces + minimal module — NOT yet imported by app.module.ts, Task 3)
 ├── main.ts                 # Bootstrap: helmet, CORS, morgan, versioning, Swagger (API-Key scheme since T5)
 └── app.module.ts           # Wires all modules + global APP_GUARD (ApiKeyGuard, T5)
 ```

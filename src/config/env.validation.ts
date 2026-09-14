@@ -22,9 +22,10 @@
  *   NUMERATOR_BASE_BACKOFF_MS → NumeratorService (TODO-04 Task 1,
  *   implemented — `src/numerator/numerator.service.ts`; URL via `getOrThrow`,
  *   the two optional knobs via `get(key, default)`); JSON_SERVER_URL →
- *   json-server client (TODO-04 Task 2 — the only key still without a
- *   consumer). TRANSACTIONS_RETURN_BODY → transactions controller (TODO-04;
- *   plumbing only as of TODO-03 §2.4). All ten are *validated* at bootstrap.
+ *   JsonServerService (TODO-04 Task 2, implemented —
+ *   `src/json-server/json-server.service.ts`; URL via `getOrThrow`).
+ *   TRANSACTIONS_RETURN_BODY → transactions controller (TODO-04; plumbing
+ *   only as of TODO-03 §2.4). All ten are *validated* at bootstrap.
  * - URL fields require a protocol (`require_protocol`, plan addendum A4-R):
  *   protocol-less garbage fails at startup instead of at the first HTTP call.
  * - Adding a required field here also requires updating `.env.example` and

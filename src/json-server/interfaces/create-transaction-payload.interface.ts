@@ -22,7 +22,7 @@ export interface CreateTransactionPayload {
   description: string;
   /** Payment method; decides the receivable status upstream, not here. */
   method: PaymentMethod;
-  /** Already-masked card number (last 4 digits) — masking is NOT this client's job. */
+  /** Already-masked card number (last 4 digits) — masking happens upstream via `maskCardNumber()` (`src/common/utils/card-number.util.ts`), NOT in this client. */
   cardNumber: string;
   /** Cardholder name as received. */
   cardHolderName: string;
