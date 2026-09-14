@@ -40,7 +40,7 @@ export function IsPositiveDecimalString(validationOptions?: ValidationOptions): 
   return (object: object, propertyName: string | symbol) => {
     registerDecorator({
       target: object.constructor,
-      propertyName,
+      propertyName: propertyName as string,
       options: validationOptions,
       constraints: [],
       validator: IsPositiveDecimalStringConstraint,
