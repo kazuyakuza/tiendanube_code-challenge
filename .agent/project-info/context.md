@@ -4,35 +4,28 @@
 
 ## Current Work Focus
 
-**TODO-06 RUNTIME-COMPLETE (branch `feat/transactions-endpoint`) — BOTH
-cycles LANDED; awaiting the workflow's step-5 closure (TODO-file
-rename/merge/push are deliberately NOT done yet).** `POST /v1/transactions`
-is LIVE: commit `d12676f`
-added the thin `TransactionsController` (registered in
-`TransactionsModule`) — auth through the existing global `ApiKeyGuard`
-(401 on missing/wrong `x-api-key`), global ValidationPipe 400, 201
-`{ transaction, receivable }` envelope or **bare 201** per the
-service-level `TRANSACTIONS_RETURN_BODY` gate, full Swagger operation at
-`/docs`. The route now invokes `TransactionsService.create()` end-to-end,
-so outbound HTTP to the mock services happens while it is called (boot is
-still config-reads-only). **Cycle B (§Task 2 of the same TODO file —
-global exception filter G4 + partial-failure compensation G5) is LANDED
-on this same branch:** the global `AllExceptionsFilter` (`APP_FILTER`)
-now answers every failure with the structured `{ statusCode, message,
-error }` body (Numerator errors → 503; `JsonServerRequestError` → 503 on
-unknown/≥500, **502** on 4xx, messages verbatim; guard-401 / pipe-400 —
-array `message` preserved — and router-404 pass through unchanged;
-unknown errors → generic 500 everywhere + server-side stack log ONLY,
-leak impossible by construction), and a receivable-write failure after
-the transaction was persisted is compensated by
-`TransactionCompensationService.deleteTransaction` (bounded DELETE retry:
-3 attempts, 200×2^n ms capped 1600 ms, 404 = already-gone = success,
-NEVER throws) before the ORIGINAL error is rethrown; a survivor orphan
-logs one `logger.error` ids+reason line — orphans **reduced, not
-eliminated** (§2.2). Gates per cycle: build/lint/test exit 0 + temp
-`ERROR-SANITY-OK` in-process filter proof. Still open: §Task 2 `[DONE]`
-(4.5b/4.6) and workflow step 5 (TODO archive/merge/push) — §Task 1/§3
-were `[DONE]`-marked at `8133d5a`.
+**TODO-06 CLOSED — the API is usable end-to-end over HTTP; merged +
+pushed.** `POST /v1/transactions` is LIVE on `main` (merge `e1f5cb1`):
+the thin `TransactionsController` (commit
+`d12676f`, registered in `TransactionsModule`) authenticates through the
+global `ApiKeyGuard` (401), validates via the global ValidationPipe (400),
+and answers the `{ transaction, receivable }` envelope or a **bare 201** per
+the service-level `TRANSACTIONS_RETURN_BODY` gate; fully documented in
+Swagger `/docs`. Cycle B (`2416915`/`1b73935`/`271c94b` + 4.3-fixes
+`35d314d`/`6e709f9`) landed the global `AllExceptionsFilter` (`APP_FILTER`):
+every failure answers the structured `{ statusCode, message, error }` body
+(Numerator → 503; `JsonServerRequestError` → 503 unknown/≥500, **502** 4xx,
+messages verbatim; guard/pipe/router pass through; unknown → generic 500 +
+stack server-side ONLY — production leak impossible by construction), and a
+receivable-write failure after the transaction persisted triggers the bounded
+`TransactionCompensationService.deleteTransaction` orphan DELETE (3 attempts,
+200×2^n ms capped 1600 ms, 404 = success, never throws) before the ORIGINAL
+error is rethrown; survivor orphans log one `logger.error` ids+reason line —
+orphans **reduced, not eliminated** (§2.2). All 3 §Task headings `[DONE]`
+(§1/§3 at `8133d5a`; §2 at `f98d714`); 4.5b verdict ADHERENT /
+archive-ready YES (zero must-fix). Build+lint+test gates green pre- and
+post-merge. User decision this run: **"Approve Global and Tasks Plans"**
+(cycle plans auto-approved; both were presented-then-skipped per that choice).
 
 **Previous cycles closed:** TODO-05 (orchestration service — merged to
 `main` at `5cf97ef`, pushed), TODO-04 (external clients — merged at
@@ -397,14 +390,14 @@ were `[DONE]`-marked at `8133d5a`.
 
 ## Recorded Facts
 
-- TODO-06 is **runtime-complete** on `feat/transactions-endpoint`:
-  Cycle A (`d12676f`, docs `9ed4ca7`/`8133d5a`) + Cycle B (`2416915`
-  `1b73935` `271c94b` `35d314d` `6e709f9`, 4.4 docs incl. this step) —
-  the §2.1 error table is fully effective and partial-failure
-  compensation ships; the error contract is now testable (TODO-07).
-  The §Task 2 `[DONE]` mark, the TODO rename/archive, the merge to
-  `main` and the push are **open workflow mechanics only** — nothing was
-  renamed or archived by this docs step.
+- TODO-06 is complete: all 3 §Task headings `[DONE]` (`8133d5a`, and
+  `f98d714`), archived as `20260913-todo-6-DONE.md`, merged to `main`
+  (`e1f5cb1`) and pushed to `origin`; feature branch
+  `feat/transactions-endpoint` deleted post-merge. Cycle A: `d12676f`
+  controller + `9ed4ca7`/`30aeee1` docs + plan archives `8133d5a`. Cycle B:
+  `2416915` filter / `1b73935` compensation / `271c94b` controller truth-fix
+  / `35d314d` review fix (booleans) / `6e709f9` simplify. Run summary:
+  global plan §9.
 - TODO-05 is complete: all 5 §Task `[DONE]`, archived as
   `20260913-todo-5-DONE.md`, merged to `main` (`5cf97ef`), pushed to
   `origin`. Feature branch `feat/transaction-orchestration` deleted
@@ -437,15 +430,12 @@ were `[DONE]`-marked at `8133d5a`.
 
 ## Immediate Next Steps
 
-1. **TODO-06 — workflow mechanics ONLY (no code work remains).** Both
-   cycles are runtime-complete on `feat/transactions-endpoint` (§Task 1 +
-   §Task 3 marked `[DONE]` at `8133d5a`; §Task 2 implemented in
-   `2416915`/`1b73935`/`271c94b` + review-fix `35d314d` + simplify
-   `6e709f9` + this 4.4 docs step). Remaining Critical-Workflow steps for
-   the CALLER, in order: 4.5 verification → 4.6 §Task 2 `[DONE]` → step 5
-   (rename `.agent/todos/20260913/20260913-todo-6.md` → `-DONE`, merge
-   `feat/transactions-endpoint` to `main`, push to `origin` ONLY). No
-   other TODO should start until this thread closes (user-picked order).
+1. **TODO-06 — CLOSED (nothing remains).** All cycle steps + workflow
+   steps 2/3/5 executed: §Task 1 + §Task 3 `[DONE]` at `8133d5a`,
+   §Task 2 `[DONE]` at `f98d714`, TODO archived as
+   `20260913-todo-6-DONE.md` (`83fb256`), global plan §9 run summary
+   (`5aea620`), merge to `main` (`e1f5cb1`) + push to `origin`, feature
+   branch deleted. No code or workflow work is pending for this file.
 2. **TODO-07 — test cycle (NEXT RUNTIME WORK, user's pick):** unit tests
    first (pure `fee-rules.ts` ⇒ no DI; `TransactionsService` with mocked
    clients — verify the 9-step order, gate both `TRANSACTIONS_RETURN_BODY`
